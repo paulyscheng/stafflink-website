@@ -1,0 +1,28 @@
+{
+  "name": "stafflink-platform",
+  "version": "1.0.0",
+  "description": "StaffLink - Blue-collar worker scheduling platform",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "apps/company",
+    "apps/worker"
+  ],
+  "scripts": {
+    "backend": "npm run dev --workspace=backend",
+    "company": "npm start --workspace=apps/company",
+    "worker": "npm start --workspace=apps/worker",
+    "install:all": "npm install",
+    "dev": "concurrently \"npm run backend\" \"npm run company\"",
+    "dev:worker": "npm run worker"
+  },
+  "devDependencies": {
+    "concurrently": "^7.6.0"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@expo/metro-config": "^0.20.17",
+    "@react-native/js-polyfills": "^0.80.2"
+  }
+}

@@ -1,0 +1,183 @@
+import React, { createContext, useContext, useEffect, useState } from 'react';
+// Development configuration
+const DEVELOPMENT_MODE = true; // Set to false to enable Firebase auth for production
+// import authService from '../services/authService'; // Enable for production
+
+const AuthContext = createContext();
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
+
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Temporarily use mock auth for debugging
+    // Simulate a logged-in user after 1 second
+    const timer = setTimeout(() => {
+      setUser({
+        uid: 'demo-user',
+        email: 'demo@stafflink.com',
+        displayName: 'Demo User'
+      });
+      setLoading(false);
+    }, 1000);
+
+    return () => clearTimeout(timer);
+    
+    /* Original Firebase auth code - temporarily disabled
+    let unsubscribe;
+    
+    // Add a small delay to ensure Firebase is fully initialized
+    const initializeAuth = async () => {
+      try {
+        // Wait a bit for Firebase to be ready
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        unsubscribe = authService.onAuthStateChange((user) => {
+          setUser(user);
+          setLoading(false);
+        });
+      } catch (error) {
+        console.log('Auth initialization error:', error);
+        setLoading(false);
+      }
+    };
+
+    initializeAuth();
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+    */
+  }, []);
+
+  const login = async (email, password) => {
+    setLoading(true);
+    // Mock login - accept any email/password for demo
+    await new Promise(resolve => setTimeout(resolve, 500));
+    setUser({
+      uid: 'demo-user',
+      email: email,
+      displayName: 'Demo User'
+    });
+    setLoading(false);
+    return { success: true, user: { email: email } };
+  };
+
+  const register = async (email, password) => {
+    setLoading(true);
+    // Mock registration
+    await new Promise(resolve => setTimeout(resolve, 500));
+    setUser({
+      uid: 'demo-user',
+      email: email,
+      displayName: 'Demo User'
+    });
+    setLoading(false);
+    return { success: true, user: { email: email } };
+  };
+
+  const sendPhoneVerification = async (phoneNumber) => {
+    // Mock phone verification
+    return { 
+      success: true, 
+      confirmationResult: {
+        confirm: async (code) => {
+          if (code === '123456') {
+            return { user: { phoneNumber: phoneNumber } };
+          }
+          throw new Error('Invalid code. Use 123456 for demo.');
+        }
+      }
+    };
+  };
+
+  const verifyPhoneCode = async (confirmationResult, code) => {
+    setLoading(true);
+    try {
+      const result = await confirmationResult.confirm(code);
+      setUser({
+        uid: 'demo-user',
+        phoneNumber: result.user.phoneNumber,
+        displayName: 'Demo User'
+      });
+      setLoading(false);
+      return { success: true, user: result.user };
+    } catch (error) {
+      setLoading(false);
+      return { success: false, error: error.message };
+    }
+  };
+
+  const signInWithGoogle = async () => {
+    setLoading(true);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    setUser({
+      uid: 'demo-user',
+      email: 'demo@gmail.com',
+      displayName: 'Demo User (Google)'
+    });
+    setLoading(false);
+    return { success: true };
+  };
+
+  const signInWithApple = async () => {
+    setLoading(true);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    setUser({
+      uid: 'demo-user',
+      email: 'demo@icloud.com',
+      displayName: 'Demo User (Apple)'
+    });
+    setLoading(false);
+    return { success: true };
+  };
+
+  const signInWithWeChat = async () => {
+    setLoading(true);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    setUser({
+      uid: 'demo-user',
+      displayName: 'Demo User (WeChat)'
+    });
+    setLoading(false);
+    return { success: true };
+  };
+
+  const logout = async () => {
+    setLoading(true);
+    await new Promise(resolve => setTimeout(resolve, 300));
+    setUser(null);
+    setLoading(false);
+    return { success: true };
+  };
+
+  const value = {
+    user,
+    loading,
+    login,
+    register,
+    sendPhoneVerification,
+    verifyPhoneCode,
+    signInWithGoogle,
+    signInWithApple,
+    signInWithWeChat,
+    logout,
+    isAuthenticated: !!user
+  };
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
