@@ -45,10 +45,18 @@ const JobDetailScreen = ({ route, navigation }) => {
       const data = await ApiService.getInvitationDetail(jobId);
       setInvitation(data);
     } catch (error) {
-      // 静默处理错误，使用本地模拟数据
-      if (error.message !== '未登录') {
-        console.log('Using local job data');
+      console.error('Failed to load invitation detail:', error);
+      // 如果是网络错误，显示更友好的错误信息
+      if (error.message && error.message.includes('无法连接到服务器')) {
+        Alert.alert(
+          '网络错误',
+          '无法连接到服务器，请检查网络连接后重试',
+          [{ text: '确定' }]
+        );
+      } else if (error.message !== '未登录') {
+        console.log('Using local job data due to error:', error.message);
       }
+      // 尝试使用本地数据
       if (localJob) {
         setInvitation(localJob);
       }
@@ -122,7 +130,7 @@ const JobDetailScreen = ({ route, navigation }) => {
   };
 
   const confirmResponse = async () => {
-    if (responseType === 'accept' && !responseMessage.trim()) {
+    if (responseType === 'accepted' && !responseMessage.trim()) {
       Alert.alert('提示', '请填写回复信息');
       return;
     }
@@ -131,7 +139,7 @@ const JobDetailScreen = ({ route, navigation }) => {
     
     try {
       // 调用真实API
-      const status = responseType === 'accept' ? 'accepted' : 'rejected';
+      const status = responseType;  // responseType 已经是 'accepted' 或 'rejected'
       const result = await ApiService.respondToInvitation(
         jobId,
         status,
@@ -144,18 +152,16 @@ const JobDetailScreen = ({ route, navigation }) => {
       setShowResponseModal(false);
       Alert.alert(
         '成功',
-        responseType === 'accept' ? '已接受邀请' : '已拒绝邀请',
+        responseType === 'accepted' ? '已接受工作邀请' : '已拒绝工作邀请',
         [{ text: '确定', onPress: () => navigation.goBack() }]
       );
     } catch (error) {
       console.error('Failed to respond to invitation:', error);
-      // 如果API失败，仍然更新本地状态
-      respondToJob(jobId, responseType, responseMessage);
-      setShowResponseModal(false);
+      // 显示错误消息
       Alert.alert(
-        '成功',
-        responseType === 'accept' ? '已接受邀请' : '已拒绝邀请',
-        [{ text: '确定', onPress: () => navigation.goBack() }]
+        '错误',
+        error.message || '操作失败，请重试',
+        [{ text: '确定' }]
       );
     } finally {
       setSubmitting(false);

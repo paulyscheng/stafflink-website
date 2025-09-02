@@ -1,96 +1,102 @@
-require('dotenv').config({ path: require('path').join(__dirname, '../../.env') });
-const db = require('../config/database');
+require('dotenv').config();
+const { Client } = require('pg');
 
-async function generateMapping() {
-  try {
-    await db.testConnection();
-    
-    const result = await db.query('SELECT id, name FROM skills ORDER BY name');
-    
-    console.log('// Skill ID mapping for backend');
-    console.log('const skillIdMapping = {');
-    
-    // Map frontend IDs to database IDs
-    const mapping = {
-      // Construction skills
-      'plumbingInstall': '管道安装',
-      'electrician': '电工',
-      'carpentry': '木工',
-      'painting': '刷漆',
-      'tiling': '贴砖',
-      'masonry': '泥瓦工',
-      'waterproofing': '防水',
-      'plumber': '水管工',
-      'welding': '焊工',
-      'rebarWorker': '钢筋工',
-      'concreteWorker': '混凝土工',
-      'scaffoldWorker': '架子工',
-      'ceilingInstall': '吊顶安装',
-      'glassInstall': '玻璃安装',
-      'locksmith': '锁匠',
-      'applianceRepair': '家电维修',
-      'surveyor': '测量员',
-      
-      // Food & Beverage skills
-      'barista': '咖啡师',
-      'waiter': '服务员',
-      'cashier': '收银员',
-      'chef': '厨师',
-      'kitchenHelper': '厨房助手',
-      'dishwasher': '洗碗工',
-      'bbqChef': '烧烤师',
-      'foodRunner': '传菜员',
-      
-      // Service skills
-      'cleaner': '清洁工',
-      
-      // Manufacturing skills
-      'operator': '操作员',
-      'qualityInspector': '质检员',
-      'packagingWorker': '包装工',
-      'assemblyWorker': '装配工',
-      'solderer': '焊接工',
-      'machineOperator': '机器操作员',
-      'sewingWorker': '缝纫工',
-      'cuttingWorker': '裁剪工',
-      'ironingWorker': '熨烫工',
-      'foodProcessor': '食品加工工',
-      'latheMachinist': '车床工',
-      'assembler': '装配员',
-      'materialHandler': '物料员',
-      'printer': '印刷工',
-      'bookbinder': '装订工',
-      
-      // Logistics skills
-      'deliveryWorker': '送货员',
-      'loader': '装卸工',
-      'sorter': '分拣员',
-      'driver': '司机',
-      'courier': '快递员',
-      'stocker': '理货员',
-      'forkliftOperator': '叉车工',
-      'warehouseKeeper': '仓库管理员',
-      
-      // General skills
-      'securityGuard': '保安',
-      'gardener': '园艺工',
-      'housekeeper': '家政服务'
-    };
-    
-    for (const [frontendId, skillName] of Object.entries(mapping)) {
-      const skill = result.rows.find(r => r.name === skillName);
-      if (skill) {
-        console.log(`  '${frontendId}': ${skill.id}, // ${skillName}`);
-      }
+async function generateSkillMapping() {
+    const client = new Client({
+        host: process.env.DB_HOST,
+        port: process.env.DB_PORT,
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+        database: process.env.DB_NAME,
+        ssl: process.env.DB_SSLMODE === 'require' ? {
+            rejectUnauthorized: true,
+            ca: require('fs').readFileSync('./ssl/ca.pem').toString()
+        } : false
+    });
+
+    try {
+        console.log('🔗 连接到数据库...\n');
+        await client.connect();
+        
+        // 获取所有技能
+        const result = await client.query(`
+            SELECT id, name, category 
+            FROM skills 
+            ORDER BY category, id;
+        `);
+        
+        console.log('📋 生成技能映射:\n');
+        console.log('const skillIdMapping = {');
+        
+        const categoryNames = {
+            'construction': '建筑装修',
+            'food_beverage': '餐饮服务',
+            'manufacturing': '制造业',
+            'logistics': '物流运输',
+            'general_services': '通用服务'
+        };
+        
+        let currentCategory = '';
+        
+        result.rows.forEach(skill => {
+            if (skill.category !== currentCategory) {
+                currentCategory = skill.category;
+                console.log(`\n  // ${categoryNames[skill.category] || skill.category}`);
+            }
+            
+            // 生成英文键名（简化版）
+            let key = skill.name
+                .replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, '') // 移除特殊字符
+                .replace(/员$/g, 'Worker')
+                .replace(/工$/g, 'Worker')
+                .replace(/师$/g, 'Master');
+            
+            // 特殊映射
+            const specialMappings = {
+                '电工': 'electrician',
+                '木工': 'carpenter',
+                '水管工': 'plumber',
+                '泥瓦工': 'mason',
+                '油漆工': 'painter',
+                '焊工': 'welder',
+                '保洁员': 'cleaner',
+                '保安员': 'securityGuard',
+                '厨师': 'chef',
+                '服务员': 'waiter',
+                '收银员': 'cashier',
+                '司机': 'driver',
+                '搬运工': 'mover',
+                '装卸工': 'loader',
+                '普工': 'generalWorker',
+                '家政服务': 'housekeeper'
+            };
+            
+            if (specialMappings[skill.name]) {
+                key = specialMappings[skill.name];
+            }
+            
+            console.log(`  '${key}': ${skill.id}, // ${skill.name}`);
+        });
+        
+        console.log('};\n');
+        
+        // 显示保洁相关的映射
+        console.log('🧹 保洁相关技能映射:');
+        const cleaningSkills = result.rows.filter(s => 
+            s.name.includes('保洁') || 
+            s.name.includes('清洁') || 
+            s.name.includes('家政')
+        );
+        
+        cleaningSkills.forEach(skill => {
+            console.log(`  ${skill.name}: ID ${skill.id}`);
+        });
+        
+    } catch (error) {
+        console.error('❌ 错误:', error.message);
+    } finally {
+        await client.end();
     }
-    
-    console.log('};');
-    
-    process.exit(0);
-  } catch (error) {
-    console.error('Error:', error);
-    process.exit(1);
-  }
 }
 
-generateMapping();
+generateSkillMapping();

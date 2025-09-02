@@ -12,6 +12,9 @@ import LoginScreen from './src/screens/LoginScreen';
 import BottomTabNavigator from './src/components/BottomTabNavigator';
 import ProjectDetailScreen from './src/screens/ProjectDetailScreen';
 import NotificationScreen from './src/screens/NotificationScreen';
+import CompletedJobsScreen from './src/screens/CompletedJobsScreen';
+import ConfirmJobScreen from './src/screens/ConfirmJobScreen';
+import PaymentScreen from './src/screens/PaymentScreen';
 
 const Stack = createStackNavigator();
 
@@ -34,6 +37,9 @@ export default function App() {
                     <Stack.Screen name="Main" component={BottomTabNavigator} />
                     <Stack.Screen name="ProjectDetail" component={ProjectDetailScreen} />
                     <Stack.Screen name="Notifications" component={NotificationScreen} />
+                    <Stack.Screen name="CompletedJobs" component={CompletedJobsScreen} />
+                    <Stack.Screen name="ConfirmJob" component={ConfirmJobScreen} />
+                    <Stack.Screen name="Payment" component={PaymentScreen} />
                   </Stack.Navigator>
                 </NavigationContainer>
               </ModalProvider>

@@ -18,7 +18,7 @@ export const AuthProvider = ({ children }) => {
 
   // 开发测试用的工人数据
   const workerAccounts = {
-    '13800138001': { code: '123455', data: { id: '94992750-d25a-4d62-9ba5-8092849291b5', name: '张师傅', skills: ['电工', '水管工', '空调维修'], experience: '15年', rating: 4.8, status: 'online', completedJobs: 45, address: '深圳市南山区' }},
+    '13800138001': { code: '123456', data: { id: '94992750-d25a-4d62-9ba5-8092849291b5', name: '张师傅', skills: ['电工', '水管工', '空调维修'], experience: '15年', rating: 4.8, status: 'online', completedJobs: 45, address: '深圳市南山区' }},
     '13800138002': { code: '123456', data: { id: '410202c6-d5f1-456d-b0be-365d6189569a', name: '李师傅', skills: ['木工', '油漆工', '家具安装'], experience: '10年', rating: 4.6, status: 'online', completedJobs: 28, address: '深圳市福田区' }},
     '13800138003': { code: '123457', data: { id: '17c0c2bf-a4f2-4cff-bf5a-adc6e474dbbe', name: '王师傅', skills: ['铺砖工', '泥瓦工', '防水工'], experience: '12年', rating: 4.9, status: 'busy', completedJobs: 46, address: '深圳市龙华区' }},
     '13800138004': { code: '123458', data: { id: '98418956-7bf2-4039-9df6-a6eb0dc3c0cd', name: '赵师傅', skills: ['搬运工', '装卸工', '司机'], experience: '8年', rating: 4.5, status: 'online', completedJobs: 42, address: '深圳市宝安区' }},

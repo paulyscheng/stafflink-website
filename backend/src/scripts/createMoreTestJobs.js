@@ -1,0 +1,169 @@
+const { Pool } = require('pg');
+const { v4: uuidv4 } = require('uuid');
+require('dotenv').config({ path: require('path').join(__dirname, '../../.env') });
+
+const pool = new Pool({
+  host: process.env.DB_HOST || 'gz-postgres-peldbckv.sql.tencentcdb.com',
+  port: process.env.DB_PORT || 23309,
+  database: process.env.DB_NAME || 'blue_collar_platform',
+  user: process.env.DB_USER || 'staffLink',
+  password: process.env.DB_PASSWORD || 'SkzgEBg-23YbBpc',
+  ssl: {
+    rejectUnauthorized: false
+  }
+});
+
+async function createMoreJobs() {
+  try {
+    console.log('🎯 创建更多测试工作记录...\n');
+
+    // 1. 获取测试工人账号 (李师傅)
+    const workerResult = await pool.query(`
+      SELECT id, name, phone 
+      FROM workers 
+      WHERE phone = '13800138002'
+    `);
+    
+    const worker = workerResult.rows[0];
+    console.log('👷 为工人创建更多工作记录:', worker.name);
+
+    // 2. 获取测试公司
+    const companyResult = await pool.query(`
+      SELECT id, company_name 
+      FROM companies 
+      LIMIT 1
+    `);
+    
+    const company = companyResult.rows[0];
+
+    // 3. 获取测试项目
+    const projectResult = await pool.query(`
+      SELECT id, project_name 
+      FROM projects 
+      LIMIT 2
+    `);
+    
+    const projects = projectResult.rows;
+
+    // 开始事务
+    await pool.query('BEGIN');
+
+    // 4. 创建一个"已到达"状态的工作记录
+    const arrivedJobId = uuidv4();
+    const arrivedInvitationId = uuidv4();
+    
+    // 先创建邀请
+    await pool.query(`
+      INSERT INTO invitations (
+        id, project_id, worker_id, company_id,
+        wage_amount, wage_unit, start_date, end_date,
+        start_time, end_time, message, status,
+        created_at, updated_at
+      ) VALUES (
+        $1, $2, $3, $4, 300, 'hourly',
+        CURRENT_DATE, CURRENT_DATE + INTERVAL '1 day',
+        '14:00', '22:00', '下午班电工作业', 'accepted',
+        NOW(), NOW()
+      )
+    `, [arrivedInvitationId, projects[0].id, worker.id, company.id]);
+
+    // 创建已到达的工作记录
+    await pool.query(`
+      INSERT INTO job_records (
+        id, invitation_id, project_id, worker_id, company_id,
+        status, wage_amount, payment_type, start_date,
+        arrival_time, arrival_latitude, arrival_longitude,
+        created_at, updated_at
+      ) VALUES (
+        $1, $2, $3, $4, $5,
+        'arrived', 300, 'hourly', CURRENT_DATE,
+        NOW(), 31.2304, 121.4737,
+        NOW(), NOW()
+      )
+    `, [arrivedJobId, arrivedInvitationId, projects[0].id, worker.id, company.id]);
+
+    console.log('✅ 创建"已到达"状态的工作记录');
+
+    // 5. 创建一个"工作中"状态的工作记录
+    const workingJobId = uuidv4();
+    const workingInvitationId = uuidv4();
+    
+    // 先创建邀请
+    await pool.query(`
+      INSERT INTO invitations (
+        id, project_id, worker_id, company_id,
+        wage_amount, wage_unit, start_date, end_date,
+        start_time, end_time, message, status,
+        created_at, updated_at
+      ) VALUES (
+        $1, $2, $3, $4, 350, 'hourly',
+        CURRENT_DATE, CURRENT_DATE,
+        '09:00', '18:00', '水管维修工作', 'accepted',
+        NOW() - INTERVAL '2 hours', NOW()
+      )
+    `, [workingInvitationId, projects[1] ? projects[1].id : projects[0].id, worker.id, company.id]);
+
+    // 创建工作中的记录
+    await pool.query(`
+      INSERT INTO job_records (
+        id, invitation_id, project_id, worker_id, company_id,
+        status, wage_amount, payment_type, start_date,
+        arrival_time, arrival_latitude, arrival_longitude,
+        start_work_time,
+        created_at, updated_at
+      ) VALUES (
+        $1, $2, $3, $4, $5,
+        'working', 350, 'hourly', CURRENT_DATE,
+        NOW() - INTERVAL '1 hour', 31.2304, 121.4737,
+        NOW() - INTERVAL '30 minutes',
+        NOW() - INTERVAL '2 hours', NOW()
+      )
+    `, [workingJobId, workingInvitationId, projects[1] ? projects[1].id : projects[0].id, worker.id, company.id]);
+
+    console.log('✅ 创建"工作中"状态的工作记录');
+
+    // 提交事务
+    await pool.query('COMMIT');
+    console.log('\n🎉 成功创建更多测试工作记录！');
+
+    // 6. 验证数据
+    console.log('\n📊 当前数据统计:');
+    
+    // 检查各状态的工作记录
+    const statusCount = await pool.query(`
+      SELECT status, COUNT(*) as count
+      FROM job_records
+      WHERE worker_id = $1
+      GROUP BY status
+      ORDER BY status
+    `, [worker.id]);
+    
+    console.log('\n工作记录状态分布:');
+    console.table(statusCount.rows);
+
+    // 显示所有工作记录
+    const allJobs = await pool.query(`
+      SELECT 
+        jr.id,
+        jr.status,
+        jr.wage_amount,
+        jr.payment_type,
+        p.project_name
+      FROM job_records jr
+      LEFT JOIN projects p ON jr.project_id = p.id
+      WHERE jr.worker_id = $1
+      ORDER BY jr.created_at DESC
+    `, [worker.id]);
+    
+    console.log('\n所有工作记录:');
+    console.table(allJobs.rows);
+
+  } catch (error) {
+    await pool.query('ROLLBACK');
+    console.error('❌ 错误:', error.message);
+  } finally {
+    await pool.end();
+  }
+}
+
+createMoreJobs();

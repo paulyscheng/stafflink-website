@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_URL } from '../config';
 
-const API_BASE_URL = 'http://localhost:3000/api';
+const API_BASE_URL = API_URL || 'http://192.168.0.216:3000/api';
 
 class ApiService {
   constructor() {
@@ -172,6 +173,38 @@ class ApiService {
   // Statistics endpoints
   async getStatistics() {
     return this.request('/statistics/company');
+  }
+
+  // Job management endpoints
+  async getCompanyJobs(status = null) {
+    const query = status ? `?status=${status}` : '';
+    return this.request(`/jobs/company/jobs${query}`);
+  }
+
+  async getJobDetail(jobId) {
+    return this.request(`/jobs/detail/${jobId}`);
+  }
+
+  async confirmCompanyWork(data) {
+    return this.request('/jobs/company/confirm', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
+
+  async payCompanyWork(data) {
+    return this.request('/jobs/company/pay', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
+
+  // Upload photo
+  async uploadWorkPhoto(data) {
+    return this.request('/jobs/photo/upload', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
   }
 }
 

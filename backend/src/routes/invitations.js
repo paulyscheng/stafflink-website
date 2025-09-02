@@ -20,8 +20,8 @@ router.post('/',
   [
     body('project_id').isUUID().withMessage('项目ID无效'),
     body('worker_id').isUUID().withMessage('工人ID无效'),
-    body('wage_offer').optional().isNumeric().withMessage('工资必须是数字'),
-    body('wage_type').optional().isIn(['hourly', 'daily', 'fixed']).withMessage('工资类型无效')
+    body('wage_amount').optional().isNumeric().withMessage('工资必须是数字'),
+    body('wage_unit').optional().isIn(['hourly', 'daily', 'fixed']).withMessage('工资类型无效')
   ],
   createInvitation
 );
@@ -52,7 +52,7 @@ router.get('/:id', getInvitationDetail);
 router.put('/:id/respond',
   [
     body('status').isIn(['accepted', 'rejected']).withMessage('响应状态无效'),
-    body('response_message').optional().isString()
+    body('response_note').optional().isString()
   ],
   respondToInvitation
 );

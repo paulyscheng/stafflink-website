@@ -1,5 +1,8 @@
 const db = require('../config/database');
 const { validationResult } = require('express-validator');
+const NotificationService = require('../services/notificationService');
+const smsService = require('../services/smsService');
+const voiceCallService = require('../services/voiceCallService');
 
 // 创建邀请
 const createInvitation = async (req, res) => {
@@ -13,8 +16,8 @@ const createInvitation = async (req, res) => {
       project_id,
       worker_id,
       message,
-      wage_offer,
-      wage_type,
+      wage_amount,
+      wage_unit,
       expires_at
     } = req.body;
 
@@ -50,11 +53,41 @@ const createInvitation = async (req, res) => {
     // 创建新邀请
     const result = await db.query(
       `INSERT INTO invitations 
-       (project_id, company_id, worker_id, message, wage_offer, wage_type, expires_at)
+       (project_id, company_id, worker_id, message, wage_amount, wage_unit, expires_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [project_id, company_id, worker_id, message, wage_offer, wage_type, expires_at]
+      [project_id, company_id, worker_id, message, wage_amount, wage_unit, expires_at]
     );
+
+    // 获取项目和公司信息用于通知
+    const projectInfo = await db.query(
+      'SELECT project_name, description FROM projects WHERE id = $1',
+      [project_id]
+    );
+    
+    const companyInfo = await db.query(
+      'SELECT company_name FROM companies WHERE id = $1',
+      [company_id]
+    );
+
+    // 创建通知给工人
+    await NotificationService.createNotification({
+      receiver_id: worker_id,
+      receiver_type: 'worker',
+      sender_id: company_id,
+      sender_type: 'company',
+      type: 'invitation_received',
+      title: '新工作机会',
+      message: `${companyInfo.rows[0].company_name}邀请您参与"${projectInfo.rows[0].project_name}"项目`,
+      project_id: project_id,
+      invitation_id: result.rows[0].id,
+      metadata: {
+        companyName: companyInfo.rows[0].company_name,
+        projectName: projectInfo.rows[0].project_name,
+        wageOffer: wage_amount,
+        wageType: wage_unit
+      }
+    });
 
     res.status(201).json({
       message: '邀请发送成功',
@@ -69,7 +102,7 @@ const createInvitation = async (req, res) => {
 // 批量创建邀请（用于项目创建时）
 const createBatchInvitations = async (req, res) => {
   try {
-    const { project_id, worker_ids, message, wage_offer, wage_type } = req.body;
+    const { project_id, worker_ids, message, wage_amount, wage_unit } = req.body;
     const company_id = req.user.id;
 
     // 检查项目权限
@@ -97,10 +130,10 @@ const createBatchInvitations = async (req, res) => {
         if (existing.rows.length === 0) {
           const result = await db.query(
             `INSERT INTO invitations 
-             (project_id, company_id, worker_id, message, wage_offer, wage_type)
+             (project_id, company_id, worker_id, message, wage_amount, wage_unit)
              VALUES ($1, $2, $3, $4, $5, $6)
              RETURNING *`,
-            [project_id, company_id, worker_id, message, wage_offer, wage_type]
+            [project_id, company_id, worker_id, message, wage_amount, wage_type]
           );
           invitations.push(result.rows[0]);
         }
@@ -156,7 +189,7 @@ const getCompanyInvitations = async (req, res) => {
       params.push(status);
     }
 
-    query += ' ORDER BY i.sent_at DESC';
+    query += ' ORDER BY i.invited_at DESC';
 
     const result = await db.query(query, params);
     res.json(result.rows);
@@ -201,7 +234,7 @@ const getWorkerInvitations = async (req, res) => {
       params.push(status);
     }
 
-    query += ' ORDER BY i.sent_at DESC';
+    query += ' ORDER BY i.invited_at DESC';
 
     const result = await db.query(query, params);
     res.json(result.rows);
@@ -215,7 +248,7 @@ const getWorkerInvitations = async (req, res) => {
 const respondToInvitation = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, response_message } = req.body;
+    const { status, response_note } = req.body;
     const worker_id = req.user.id;
 
     // 验证状态值
@@ -248,11 +281,77 @@ const respondToInvitation = async (req, res) => {
     // 更新邀请状态
     const result = await db.query(
       `UPDATE invitations 
-       SET status = $1, response_message = $2, responded_at = CURRENT_TIMESTAMP
+       SET status = $1, response_note = $2, responded_at = CURRENT_TIMESTAMP
        WHERE id = $3
        RETURNING *`,
-      [status, response_message, id]
+      [status, response_note, id]
     );
+
+    // 如果接受邀请，创建job_record
+    if (status === 'accepted') {
+      const { v4: uuidv4 } = require('uuid');
+      const jobRecordId = uuidv4();
+      
+      // 获取项目开始日期
+      const projectData = await db.query(
+        'SELECT start_date FROM projects WHERE id = $1',
+        [invitation.project_id]
+      );
+      
+      await db.query(
+        `INSERT INTO job_records (
+          id,
+          invitation_id,
+          project_id,
+          worker_id,
+          company_id,
+          start_date,
+          status,
+          wage_amount,
+          created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP)`,
+        [
+          jobRecordId,
+          id,
+          invitation.project_id,
+          worker_id,
+          invitation.company_id,
+          projectData.rows[0]?.start_date || new Date(),
+          'active',  // job_records使用'active'而不是'accepted'
+          invitation.wage_amount
+        ]
+      );
+    }
+
+    // 获取相关信息用于通知
+    const workerInfo = await db.query(
+      'SELECT name FROM workers WHERE id = $1',
+      [worker_id]
+    );
+    
+    const projectInfo = await db.query(
+      'SELECT project_name FROM projects WHERE id = $1',
+      [invitation.project_id]
+    );
+
+    // 创建通知给企业
+    await NotificationService.createNotification({
+      receiver_id: invitation.company_id,
+      receiver_type: 'company',
+      sender_id: worker_id,
+      sender_type: 'worker',
+      type: status === 'accepted' ? 'invitation_accepted' : 'invitation_rejected',
+      title: status === 'accepted' ? '工人已确认' : '工人已拒绝',
+      message: `${workerInfo.rows[0].name}${status === 'accepted' ? '已确认参与' : '拒绝了'}"${projectInfo.rows[0].project_name}"项目${response_note ? '，留言：' + response_note : ''}`,
+      project_id: invitation.project_id,
+      invitation_id: invitation.id,
+      metadata: {
+        workerName: workerInfo.rows[0].name,
+        projectName: projectInfo.rows[0].project_name,
+        responseMessage: response_note,
+        status: status
+      }
+    });
 
     res.json({
       message: status === 'accepted' ? '已接受邀请' : '已拒绝邀请',
@@ -295,6 +394,34 @@ const cancelInvitation = async (req, res) => {
        RETURNING *`,
       [id]
     );
+
+    // 获取项目信息
+    const projectInfo = await db.query(
+      'SELECT project_name FROM projects WHERE id = $1',
+      [invitation.project_id]
+    );
+    
+    const companyInfo = await db.query(
+      'SELECT company_name FROM companies WHERE id = $1',
+      [company_id]
+    );
+
+    // 通知工人邀请已取消
+    await NotificationService.createNotification({
+      receiver_id: invitation.worker_id,
+      receiver_type: 'worker',
+      sender_id: company_id,
+      sender_type: 'company',
+      type: 'invitation_cancelled',
+      title: '邀请已取消',
+      message: `${companyInfo.rows[0].company_name}取消了"${projectInfo.rows[0].project_name}"项目的邀请`,
+      project_id: invitation.project_id,
+      invitation_id: invitation.id,
+      metadata: {
+        companyName: companyInfo.rows[0].company_name,
+        projectName: projectInfo.rows[0].project_name
+      }
+    });
 
     res.json({
       message: '邀请已取消',

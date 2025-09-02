@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,16 +10,57 @@ import {
   Alert,
   Switch,
 } from 'react-native';
-import { FontAwesome as Icon } from '@expo/vector-icons';
+import { Ionicons as Icon } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
+import { API_URL } from '../config';
 
 const ProfileScreen = ({ navigation }) => {
   const [notificationEnabled, setNotificationEnabled] = useState(true);
   const [locationEnabled, setLocationEnabled] = useState(true);
+  const [unreadCount, setUnreadCount] = useState(0);
   
   const { t } = useLanguage();
   const { user, logout } = useAuth();
+
+  // 获取未读通知数量
+  useEffect(() => {
+    fetchUnreadCount();
+    
+    // 设置定时器定期获取未读数量
+    const interval = setInterval(fetchUnreadCount, 30000); // 每30秒更新一次
+    
+    // 监听导航焦点事件，当返回到个人中心时刷新数量
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchUnreadCount();
+    });
+    
+    return () => {
+      clearInterval(interval);
+      unsubscribe();
+    };
+  }, [navigation]);
+
+  const fetchUnreadCount = async () => {
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      if (!token) return;
+      
+      const response = await fetch(`${API_URL}/notifications/unread-count`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setUnreadCount(data.data?.unread_count || 0);
+      }
+    } catch (error) {
+      console.error('获取未读通知数量失败:', error);
+    }
+  };
 
   const handleLogout = () => {
     Alert.alert(
@@ -38,18 +79,23 @@ const ProfileScreen = ({ navigation }) => {
     );
   };
 
-  const MenuItem = ({ icon, title, subtitle, onPress, showArrow = true, rightComponent }) => (
+  const MenuItem = ({ icon, title, subtitle, onPress, showArrow = true, rightComponent, badge }) => (
     <TouchableOpacity style={styles.menuItem} onPress={onPress}>
       <View style={styles.menuItemLeft}>
         <View style={styles.iconContainer}>
           <Icon name={icon} size={20} color="#3b82f6" />
+          {badge > 0 && (
+            <View style={styles.badgeContainer}>
+              <Text style={styles.badgeText}>{badge > 99 ? '99+' : badge}</Text>
+            </View>
+          )}
         </View>
         <View style={styles.menuItemContent}>
           <Text style={styles.menuItemTitle}>{title}</Text>
           {subtitle && <Text style={styles.menuItemSubtitle}>{subtitle}</Text>}
         </View>
       </View>
-      {rightComponent || (showArrow && <Icon name="angle-right" size={16} color="#9ca3af" />)}
+      {rightComponent || (showArrow && <Icon name="chevron-forward-outline" size={20} color="#9ca3af" />)}
     </TouchableOpacity>
   );
 
@@ -60,7 +106,7 @@ const ProfileScreen = ({ navigation }) => {
         <View style={styles.header}>
           <View style={styles.profileContainer}>
             <View style={styles.avatar}>
-              <Icon name="user" size={32} color="#ffffff" />
+              <Icon name="person-outline" size={32} color="#ffffff" />
             </View>
             <View style={styles.profileInfo}>
               <Text style={styles.userName}>{user?.name}</Text>
@@ -74,7 +120,7 @@ const ProfileScreen = ({ navigation }) => {
             </View>
           </View>
           <TouchableOpacity style={styles.editButton}>
-            <Icon name="edit" size={16} color="#3b82f6" />
+            <Icon name="create-outline" size={20} color="#3b82f6" />
           </TouchableOpacity>
         </View>
 
@@ -98,19 +144,26 @@ const ProfileScreen = ({ navigation }) => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>工作信息</Text>
           <MenuItem
-            icon="wrench"
+            icon="notifications-outline"
+            title="消息通知"
+            subtitle={unreadCount > 0 ? `您有${unreadCount}条未读消息` : "查看所有通知消息"}
+            badge={unreadCount}
+            onPress={() => navigation.navigate('Notification')}
+          />
+          <MenuItem
+            icon="construct-outline"
             title="我的技能"
             subtitle="管理你的专业技能"
             onPress={() => Alert.alert('提示', '技能管理功能开发中')}
           />
           <MenuItem
-            icon="star"
+            icon="star-outline"
             title="我的评价"
             subtitle="查看客户对你的评价"
             onPress={() => Alert.alert('提示', '评价查看功能开发中')}
           />
           <MenuItem
-            icon="certificate"
+            icon="ribbon-outline"
             title="资质证书"
             subtitle="上传和管理你的证书"
             onPress={() => Alert.alert('提示', '证书管理功能开发中')}
@@ -121,7 +174,7 @@ const ProfileScreen = ({ navigation }) => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>设置</Text>
           <MenuItem
-            icon="bell"
+            icon="notifications-circle-outline"
             title="通知设置"
             subtitle="管理通知推送"
             showArrow={false}
@@ -135,7 +188,7 @@ const ProfileScreen = ({ navigation }) => {
             }
           />
           <MenuItem
-            icon="map-marker"
+            icon="location-outline"
             title="位置服务"
             subtitle="允许获取位置信息"
             showArrow={false}
@@ -149,7 +202,7 @@ const ProfileScreen = ({ navigation }) => {
             }
           />
           <MenuItem
-            icon="lock"
+            icon="lock-closed-outline"
             title="隐私设置"
             subtitle="管理个人信息隐私"
             onPress={() => Alert.alert('提示', '隐私设置功能开发中')}
@@ -160,19 +213,19 @@ const ProfileScreen = ({ navigation }) => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>账户</Text>
           <MenuItem
-            icon="credit-card"
+            icon="card-outline"
             title="收款设置"
             subtitle="管理收款账户"
             onPress={() => Alert.alert('提示', '收款设置功能开发中')}
           />
           <MenuItem
-            icon="shield"
+            icon="shield-checkmark-outline"
             title="安全中心"
             subtitle="账户安全设置"
             onPress={() => Alert.alert('提示', '安全中心功能开发中')}
           />
           <MenuItem
-            icon="question-circle"
+            icon="help-circle-outline"
             title="帮助中心"
             subtitle="常见问题和客服"
             onPress={() => Alert.alert('提示', '帮助中心功能开发中')}
@@ -183,19 +236,19 @@ const ProfileScreen = ({ navigation }) => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>关于</Text>
           <MenuItem
-            icon="info-circle"
+            icon="information-circle-outline"
             title="关于我们"
-            subtitle="了解BlueShift Worker"
-            onPress={() => Alert.alert('关于', 'BlueShift Worker v1.0.0\n专业的蓝领工作平台')}
+            subtitle="了解StaffLink Worker"
+            onPress={() => Alert.alert('关于', 'StaffLink Worker v1.0.0\n专业的蓝领派工平台')}
           />
           <MenuItem
-            icon="file-text"
+            icon="document-text-outline"
             title="用户协议"
             subtitle="查看用户协议"
             onPress={() => Alert.alert('提示', '用户协议功能开发中')}
           />
           <MenuItem
-            icon="eye"
+            icon="eye-outline"
             title="隐私政策"
             subtitle="查看隐私政策"
             onPress={() => Alert.alert('提示', '隐私政策功能开发中')}
@@ -204,7 +257,7 @@ const ProfileScreen = ({ navigation }) => {
 
         {/* Logout Button */}
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Icon name="sign-out" size={20} color="#ef4444" />
+          <Icon name="log-out-outline" size={20} color="#ef4444" />
           <Text style={styles.logoutText}>退出登录</Text>
         </TouchableOpacity>
 
@@ -349,6 +402,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+    position: 'relative',
+  },
+  badgeContainer: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#ef4444',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    minWidth: 20,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#ffffff',
+  },
+  badgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   menuItemContent: {
     flex: 1,

@@ -47,19 +47,15 @@ const NotificationScreen = ({ navigation }) => {
   };
 
   const handleNotificationPress = (notification) => {
-    // Mark as read and navigate to relevant screen
+    // Mark as read
     markAsRead(notification.id);
     
-    if (notification.projectId) {
-      // Navigate to project detail - would need to fetch project by ID in real implementation
-      navigation.navigate('ProjectDetail', { 
-        project: { 
-          id: notification.projectId, 
-          projectName: notification.message.split('"')[1] || 'Project',
-          status: 'pending'
-        } 
-      });
-    }
+    // TODO: 实现真实的导航逻辑
+    // 需要从API获取真实的项目数据
+    // if (notification.projectId) {
+    //   // 从API获取项目详情后再导航
+    //   navigation.navigate('ProjectDetail', { projectId: notification.projectId });
+    // }
   };
 
   const markAllAsRead = () => {

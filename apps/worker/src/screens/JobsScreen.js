@@ -20,6 +20,8 @@ const JobsScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [invitations, setInvitations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [acceptedCount, setAcceptedCount] = useState(0);
   
   const { t } = useLanguage();
   const { jobs, getJobsByStatus, getJobStats } = useJobs();
@@ -42,9 +44,22 @@ const JobsScreen = ({ navigation }) => {
     
     try {
       setLoading(true);
-      const data = await ApiService.getInvitations(activeFilter === 'all' ? null : activeFilter);
-      console.log(`Fetched ${data?.length || 0} invitations for status: ${activeFilter}`);
-      setInvitations(data || []);
+      
+      // 如果是查看已接受的工作，需要从job_records获取
+      if (activeFilter === 'accepted') {
+        const jobRecords = await ApiService.getWorkerJobs();
+        console.log(`Fetched ${jobRecords?.length || 0} job records`);
+        setInvitations(jobRecords || []);
+        setAcceptedCount(jobRecords?.length || 0);
+      } else {
+        // 查看待处理或已拒绝的邀请
+        const data = await ApiService.getInvitations(activeFilter === 'all' ? null : activeFilter);
+        console.log(`Fetched ${data?.length || 0} invitations for status: ${activeFilter}`);
+        setInvitations(data || []);
+        if (activeFilter === 'pending') {
+          setPendingCount(data?.length || 0);
+        }
+      }
     } catch (error) {
       // 静默处理错误
       if (error.message !== '未登录') {
@@ -56,22 +71,57 @@ const JobsScreen = ({ navigation }) => {
     }
   };
 
+  // 获取统计数据
+  const fetchStats = async () => {
+    if (!user || !user.id) return;
+    
+    // 如果用户是模拟用户ID（worker_开头），使用本地数据
+    if (user.id.startsWith('worker_')) {
+      setPendingCount(getJobsByStatus('pending').length);
+      setAcceptedCount(getJobsByStatus('accepted').length);
+      return;
+    }
+    
+    try {
+      // 只在不是当前activeFilter时获取统计数据
+      if (activeFilter !== 'pending') {
+        const pendingInvitations = await ApiService.getInvitations('pending');
+        setPendingCount(pendingInvitations?.length || 0);
+      }
+      
+      if (activeFilter !== 'accepted') {
+        const jobRecords = await ApiService.getWorkerJobs();
+        setAcceptedCount(jobRecords?.length || 0);
+      }
+    } catch (error) {
+      console.log('Failed to fetch stats:', error);
+      if (activeFilter !== 'pending') setPendingCount(0);
+      if (activeFilter !== 'accepted') setAcceptedCount(0);
+    }
+  };
+
   useEffect(() => {
-    fetchInvitations();
+    if (user && user.id) {
+      fetchInvitations();
+      fetchStats();
+    }
   }, [activeFilter, user]);
 
   // 使用真实数据计算统计
   const stats = {
-    pending: invitations.filter(i => i.status === 'pending').length,
-    accepted: invitations.filter(i => i.status === 'accepted').length,
-    rejected: invitations.filter(i => i.status === 'rejected').length,
+    pending: pendingCount,
+    accepted: acceptedCount,
+    rejected: 0,
   };
   
   const filteredJobs = invitations;
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchInvitations();
+    await Promise.all([
+      fetchInvitations(),
+      fetchStats()
+    ]);
     setRefreshing(false);
   };
 
@@ -135,7 +185,19 @@ const JobsScreen = ({ navigation }) => {
   const JobCard = ({ job }) => (
     <TouchableOpacity 
       style={styles.jobCard}
-      onPress={() => navigation.navigate('JobDetail', { jobId: job.id })}
+      onPress={() => {
+        // 如果是已接受的工作，跳转到工作管理页面
+        if (job.status === 'accepted' || job.status === 'arrived' || job.status === 'working') {
+          // 对于job_records，使用job_record_id
+          const jobId = job.job_record_id || job.id;
+          console.log('Navigating to ActiveJob with jobId:', jobId);
+          navigation.navigate('ActiveJob', { jobId });
+        } else {
+          // 对于邀请，使用invitation id
+          console.log('Navigating to JobDetail with jobId:', job.id);
+          navigation.navigate('JobDetail', { jobId: job.id });
+        }
+      }}
     >
       {/* Job Header */}
       <View style={styles.jobHeader}>
@@ -186,10 +248,26 @@ const JobsScreen = ({ navigation }) => {
       {job.status !== 'pending' && (
         <View style={[
           styles.statusBadge,
-          { backgroundColor: job.status === 'accepted' ? '#22c55e' : '#ef4444' }
+          { backgroundColor: 
+            job.status === 'rejected' ? '#ef4444' : 
+            job.status === 'accepted' ? '#22c55e' :
+            job.status === 'arrived' ? '#3b82f6' :
+            job.status === 'working' ? '#f59e0b' :
+            job.status === 'completed' ? '#8b5cf6' :
+            job.status === 'confirmed' ? '#10b981' :
+            '#6b7280'
+          }
         ]}>
           <Text style={styles.statusBadgeText}>
-            {job.status === 'accepted' ? '已接受' : '已拒绝'}
+            {job.status === 'accepted' ? '已接受' :
+             job.status === 'rejected' ? '已拒绝' :
+             job.status === 'arrived' ? '已到达' :
+             job.status === 'working' ? '工作中' :
+             job.status === 'completed' ? '已完成' :
+             job.status === 'confirmed' ? '已确认' :
+             job.status === 'paid' ? '已支付' :
+             job.status
+            }
           </Text>
         </View>
       )}

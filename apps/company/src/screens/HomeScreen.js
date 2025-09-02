@@ -297,10 +297,10 @@ const HomeScreen = ({ navigation, route }) => {
             
             <TouchableOpacity 
               style={styles.quickActionCard}
-              onPress={() => navigation.navigate('Profile')}
+              onPress={() => navigation.navigate('CompletedJobs')}
             >
-              <Icon name="cog" size={24} color="#8b5cf6" />
-              <Text style={styles.quickActionText}>{t('settings')}</Text>
+              <Icon name="check-circle" size={24} color="#8b5cf6" />
+              <Text style={styles.quickActionText}>工作确认</Text>
             </TouchableOpacity>
             
             <TouchableOpacity style={styles.quickActionCard}>

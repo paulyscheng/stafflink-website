@@ -185,11 +185,15 @@ const ProjectDetailScreen = ({ route, navigation }) => {
   const formatPayment = () => {
     const paymentType = project.payment_type || project.paymentType;
     const budgetRange = project.budget_range || project.budgetRange;
+    const originalWage = project.original_wage || project.originalWage;
+    const dailyWage = project.daily_wage || project.dailyWage;
     
-    console.log('Payment info:', { paymentType, budgetRange, project }); // 调试日志
+    console.log('Payment info:', { paymentType, budgetRange, originalWage, dailyWage, project }); // 调试日志
     
-    if (paymentType === 'hourly' && budgetRange) return `¥${budgetRange}/小时`;
-    if (paymentType === 'daily' && budgetRange) return `¥${budgetRange}/天`;
+    // 对于时薪类型，使用 original_wage 字段
+    if (paymentType === 'hourly' && originalWage) return `¥${originalWage}/小时`;
+    // 对于日薪类型，使用 daily_wage 或 budget_range
+    if (paymentType === 'daily' && (dailyWage || budgetRange)) return `¥${dailyWage || budgetRange}/天`;
     if (paymentType === 'total' && budgetRange) return `¥${budgetRange}（总价）`;
     if (paymentType === 'fixed' && budgetRange) return `¥${budgetRange}（一口价）`;
     return '面议';
@@ -276,6 +280,38 @@ const ProjectDetailScreen = ({ route, navigation }) => {
             </Text>
           </View>
         </View>
+        
+        {/* 费用明细卡片 */}
+        {(project.payment_type || project.paymentType) === 'hourly' && (
+          <View style={styles.feeDetailCard}>
+            <View style={styles.feeDetailHeader}>
+              <Icon name="calculator" size={16} color="#f59e0b" />
+              <Text style={styles.feeDetailTitle}>费用计算</Text>
+            </View>
+            <View style={styles.feeCalculation}>
+              <View style={styles.feeRow}>
+                <Text style={styles.feeLabel}>时薪</Text>
+                <Text style={styles.feeValue}>
+                  ¥{project.original_wage || project.originalWage || 0}/小时
+                </Text>
+              </View>
+              <View style={styles.feeRow}>
+                <Text style={styles.feeLabel}>工作时长</Text>
+                <Text style={styles.feeValue}>8 小时/天</Text>
+              </View>
+              <View style={styles.feeDivider} />
+              <View style={styles.feeRow}>
+                <Text style={styles.feeTotalLabel}>日薪总计</Text>
+                <Text style={styles.feeTotalValue}>
+                  ¥{((project.original_wage || project.originalWage || 0) * 8).toFixed(2)}
+                </Text>
+              </View>
+              <Text style={styles.feeFormula}>
+                ¥{project.original_wage || project.originalWage || 0}/小时 × 8小时 = ¥{((project.original_wage || project.originalWage || 0) * 8).toFixed(2)}/天
+              </Text>
+            </View>
+          </View>
+        )}
         
         {/* 进度条 */}
         <View style={styles.progressSection}>
@@ -853,6 +889,69 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#ffffff',
     marginLeft: 6,
+  },
+  
+  // 费用明细样式
+  feeDetailCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#fef3c7',
+  },
+  feeDetailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  feeDetailTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginLeft: 8,
+  },
+  feeCalculation: {
+    backgroundColor: '#fffbeb',
+    borderRadius: 8,
+    padding: 12,
+  },
+  feeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  feeLabel: {
+    fontSize: 14,
+    color: '#374151',
+  },
+  feeValue: {
+    fontSize: 14,
+    color: '#374151',
+    fontWeight: '500',
+  },
+  feeDivider: {
+    height: 1,
+    backgroundColor: '#fef3c7',
+    marginVertical: 8,
+  },
+  feeTotalLabel: {
+    fontSize: 14,
+    color: '#374151',
+    fontWeight: '600',
+  },
+  feeTotalValue: {
+    fontSize: 18,
+    color: '#f59e0b',
+    fontWeight: '700',
+  },
+  feeFormula: {
+    fontSize: 12,
+    color: '#92400e',
+    textAlign: 'center',
+    marginTop: 8,
+    fontWeight: '500',
   },
   
   // 工人Tab样式

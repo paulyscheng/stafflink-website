@@ -12,19 +12,29 @@ router.use(protect);
 // @access  Private
 router.get('/', notificationController.getNotifications);
 
-// @desc    Mark notification as read
-// @route   PUT /api/notifications/:id/read
+// @desc    Get unread notification count
+// @route   GET /api/notifications/unread-count
 // @access  Private
-router.put('/:id/read', notificationController.markAsRead);
+router.get('/unread-count', notificationController.getUnreadCount);
 
 // @desc    Mark all notifications as read
 // @route   PUT /api/notifications/read-all
 // @access  Private
 router.put('/read-all', notificationController.markAllAsRead);
 
+// @desc    Mark notification as read
+// @route   PUT /api/notifications/:id/read
+// @access  Private
+router.put('/:id/read', notificationController.markAsRead);
+
 // @desc    Delete notification
 // @route   DELETE /api/notifications/:id
 // @access  Private
 router.delete('/:id', notificationController.deleteNotification);
+
+// @desc    Batch delete notifications
+// @route   DELETE /api/notifications/batch
+// @access  Private
+router.delete('/batch', notificationController.deleteBatchNotifications);
 
 module.exports = router;

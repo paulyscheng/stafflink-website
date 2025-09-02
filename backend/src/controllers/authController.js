@@ -26,8 +26,8 @@ const sendVerificationCode = async (req, res, next) => {
 
     // Check rate limiting - only one code per minute per phone
     const recentCodeQuery = `
-      SELECT * FROM sms_codes 
-      WHERE phone = $1 AND created_at > NOW() - INTERVAL '1 minute'
+      SELECT * FROM verification_codes 
+      WHERE phone = $1 AND created_at > NOW() - INTERVAL '1 minute' AND is_used = false
       ORDER BY created_at DESC LIMIT 1
     `;
     const recentCode = await db.query(recentCodeQuery, [phone]);
@@ -60,12 +60,22 @@ const sendVerificationCode = async (req, res, next) => {
     
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
-    // Store code in database
+    // Store code in database with user_type
+    const userType = req.body.userType || 'worker'; // Get from request
     const storeCodeQuery = `
-      INSERT INTO sms_codes (phone, code, purpose, expires_at)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO verification_codes (phone, code, user_type, purpose, expires_at, ip_address, user_agent)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id
     `;
-    await db.query(storeCodeQuery, [phone, code, purpose, expiresAt]);
+    await db.query(storeCodeQuery, [
+      phone, 
+      code, 
+      userType,
+      purpose, 
+      expiresAt,
+      req.ip || req.connection.remoteAddress,
+      req.headers['user-agent']
+    ]);
 
     // Send SMS
     if (config.sms.enabled && config.isProduction) {
@@ -123,7 +133,7 @@ const login = async (req, res, next) => {
     if (process.env.NODE_ENV === 'development') {
       const testCodes = {
         // 工人测试账号
-        '13800138001': '123455', // 张师傅
+        '13800138001': '123456', // 张师傅/李师傅 - 主测试账号
         '13800138002': '123456', // 李师傅
         '13800138003': '123457', // 王师傅
         '13800138004': '123458', // 赵师傅
@@ -147,9 +157,9 @@ const login = async (req, res, next) => {
     // 如果不是测试验证码，进行正常验证
     if (!codeValid) {
       const codeQuery = `
-        SELECT * FROM sms_codes 
+        SELECT * FROM verification_codes 
         WHERE phone = $1 AND code = $2 AND purpose = 'login' 
-        AND expires_at > NOW() AND used = false
+        AND expires_at > NOW() AND is_used = false
         ORDER BY created_at DESC LIMIT 1
       `;
       const codeResult = await db.query(codeQuery, [phone, code]);
@@ -162,7 +172,7 @@ const login = async (req, res, next) => {
       }
 
       // Mark code as used
-      const markUsedQuery = 'UPDATE sms_codes SET used = true WHERE id = $1';
+      const markUsedQuery = 'UPDATE verification_codes SET is_used = true WHERE id = $1';
       await db.query(markUsedQuery, [codeResult.rows[0].id]);
     }
 

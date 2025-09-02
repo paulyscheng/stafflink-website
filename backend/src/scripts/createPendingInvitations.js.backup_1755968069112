@@ -1,0 +1,190 @@
+const { Pool } = require('pg');
+const { v4: uuidv4 } = require('uuid');
+require('dotenv').config({ path: require('path').join(__dirname, '../../.env') });
+
+const pool = new Pool({
+  host: process.env.DB_HOST || 'gz-postgres-peldbckv.sql.tencentcdb.com',
+  port: process.env.DB_PORT || 23309,
+  database: process.env.DB_NAME || 'blue_collar_platform',
+  user: process.env.DB_USER || 'staffLink',
+  password: process.env.DB_PASSWORD || 'SkzgEBg-23YbBpc',
+  ssl: {
+    rejectUnauthorized: false
+  }
+});
+
+async function createPendingInvitations() {
+  try {
+    console.log('📬 创建新的待响应邀请...\n');
+
+    // 获取张师傅的信息
+    const worker = await pool.query(
+      "SELECT id, name FROM workers WHERE phone = '13800138001'"
+    );
+    
+    if (worker.rows.length === 0) {
+      console.log('❌ 未找到张师傅账号');
+      return;
+    }
+    
+    const workerId = worker.rows[0].id;
+    const workerName = worker.rows[0].name;
+    console.log(`找到工人: ${workerName} (ID: ${workerId})`);
+
+    // 首先检查现有邀请状态
+    const existingInvitations = await pool.query(`
+      SELECT status, COUNT(*) as count 
+      FROM invitations 
+      WHERE worker_id = $1 
+      GROUP BY status
+      ORDER BY status
+    `, [workerId]);
+    
+    console.log('\n📊 现有邀请状态:');
+    console.table(existingInvitations.rows);
+
+    // 获取企业和项目信息
+    const company = await pool.query('SELECT id, company_name FROM companies LIMIT 1');
+    if (company.rows.length === 0) {
+      console.log('❌ 未找到企业账号');
+      return;
+    }
+    
+    const companyId = company.rows[0].id;
+    const companyName = company.rows[0].company_name;
+
+    // 获取项目信息
+    const projects = await pool.query(
+      'SELECT id, project_name, start_date FROM projects WHERE company_id = $1 LIMIT 5',
+      [companyId]
+    );
+
+    if (projects.rows.length === 0) {
+      console.log('❌ 未找到项目');
+      return;
+    }
+
+    // 创建新的待响应邀请
+    const newInvitations = [
+      {
+        id: uuidv4(),
+        project_id: projects.rows[0].id,
+        worker_id: workerId,
+        company_id: companyId,
+        wage_offer: 380,
+        wage_type: 'daily',
+        message: '急需电工师傅，待遇优厚，工作环境良好',
+        status: 'pending',
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7天后过期
+      },
+      {
+        id: uuidv4(),
+        project_id: projects.rows[1] ? projects.rows[1].id : projects.rows[0].id,
+        worker_id: workerId,
+        company_id: companyId,
+        wage_offer: 65,
+        wage_type: 'hourly',
+        message: '商场装修项目，需要有经验的水电工，长期合作优先',
+        status: 'pending',
+        expires_at: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000) // 5天后过期
+      },
+      {
+        id: uuidv4(),
+        project_id: projects.rows[2] ? projects.rows[2].id : projects.rows[0].id,
+        worker_id: workerId,
+        company_id: companyId,
+        wage_offer: 3500,
+        wage_type: 'fixed',
+        message: '别墅维修项目，一口价3500元，预计2-3天完成',
+        status: 'pending',
+        expires_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000) // 3天后过期
+      }
+    ];
+
+    // 插入新邀请
+    let successCount = 0;
+    console.log('\n📝 创建新邀请:');
+    
+    for (const inv of newInvitations) {
+      try {
+        await pool.query(`
+          INSERT INTO invitations (
+            id, project_id, worker_id, company_id,
+            wage_offer, wage_type, message, status,
+            expires_at, sent_at, created_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          ON CONFLICT (id) DO NOTHING
+        `, [
+          inv.id,
+          inv.project_id,
+          inv.worker_id,
+          inv.company_id,
+          inv.wage_offer,
+          inv.wage_type,
+          inv.message,
+          inv.status,
+          inv.expires_at
+        ]);
+        
+        const project = projects.rows.find(p => p.id === inv.project_id);
+        console.log(`✅ 创建邀请: ${project?.project_name || '项目'} - ¥${inv.wage_offer}/${inv.wage_type === 'daily' ? '天' : inv.wage_type === 'hourly' ? '小时' : '总价'}`);
+        successCount++;
+      } catch (error) {
+        console.error(`❌ 创建邀请失败:`, error.message);
+      }
+    }
+
+    // 重新统计
+    const finalStats = await pool.query(`
+      SELECT 
+        status,
+        COUNT(*) as count
+      FROM invitations
+      WHERE worker_id = $1
+      GROUP BY status
+      ORDER BY 
+        CASE status
+          WHEN 'pending' THEN 1
+          WHEN 'accepted' THEN 2
+          WHEN 'rejected' THEN 3
+          ELSE 4
+        END
+    `, [workerId]);
+    
+    console.log('\n📊 更新后的邀请统计:');
+    console.table(finalStats.rows.map(row => ({
+      状态: row.status,
+      数量: row.count
+    })));
+
+    // 获取已接受的工作（job_records）
+    const jobRecords = await pool.query(`
+      SELECT status, COUNT(*) as count
+      FROM job_records
+      WHERE worker_id = $1
+      GROUP BY status
+    `, [workerId]);
+    
+    if (jobRecords.rows.length > 0) {
+      console.log('\n🔧 工作记录状态:');
+      console.table(jobRecords.rows.map(row => ({
+        状态: row.status,
+        数量: row.count
+      })));
+    }
+
+    console.log('\n🎉 新邀请创建完成！');
+    console.log('📱 现在可以用 13800138001 / 123456 登录查看了');
+    console.log('\n在工作邀请页面应该能看到:');
+    console.log(`  - 新邀请标签: ${finalStats.rows.find(r => r.status === 'pending')?.count || 0} 个待响应`);
+    console.log(`  - 已接受标签: 显示job_records中的工作`);
+
+  } catch (error) {
+    console.error('❌ 错误:', error.message);
+  } finally {
+    await pool.end();
+  }
+}
+
+// 执行
+createPendingInvitations();

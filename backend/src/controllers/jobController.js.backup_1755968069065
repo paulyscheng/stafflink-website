@@ -1,0 +1,632 @@
+const db = require('../config/database');
+const { v4: uuidv4 } = require('uuid');
+const notificationService = require('../services/notificationService');
+
+// 获取工人的工作列表
+const getWorkerJobs = async (req, res) => {
+  try {
+    const workerId = req.user.id;
+    const { status, page = 1, limit = 20 } = req.query;
+
+    let query = `
+      SELECT 
+        jr.*,
+        p.project_name,
+        p.project_address,
+        p.start_date,
+        p.end_date,
+        p.start_time,
+        p.end_time,
+        p.description as work_description,
+        p.required_workers,
+        p.estimated_duration,
+        c.company_name,
+        c.phone as company_phone,
+        i.wage_amount,
+        i.original_wage,
+        i.wage_unit,
+        p.payment_type,
+        p.daily_wage,
+        p.original_wage as project_original_wage
+      FROM job_records jr
+      LEFT JOIN projects p ON jr.project_id = p.id
+      LEFT JOIN companies c ON jr.company_id = c.id
+      LEFT JOIN invitations i ON jr.invitation_id = i.id
+      WHERE jr.worker_id = $1
+      AND jr.status NOT IN ('rejected', 'cancelled')
+    `;
+
+    const params = [workerId];
+    
+    if (status) {
+      query += ` AND jr.status = $${params.length + 1}`;
+      params.push(status);
+    }
+
+    query += ` ORDER BY jr.created_at DESC`;
+    query += ` LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    params.push(limit, (page - 1) * limit);
+
+    const result = await db.query(query, params);
+
+    // 获取总数
+    let countQuery = `
+      SELECT COUNT(*) as total
+      FROM job_records jr
+      WHERE jr.worker_id = $1
+      AND jr.status NOT IN ('rejected', 'cancelled')
+    `;
+    const countParams = [workerId];
+    
+    if (status) {
+      countQuery += ` AND jr.status = $2`;
+      countParams.push(status);
+    }
+
+    const countResult = await db.query(countQuery, countParams);
+    const total = parseInt(countResult.rows[0].total);
+
+    res.json({
+      success: true,
+      data: result.rows,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('Get worker jobs error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get worker jobs'
+    });
+  }
+};
+
+// 获取企业的工作记录
+const getCompanyJobs = async (req, res) => {
+  try {
+    const companyId = req.user.id;
+    const { status, projectId, page = 1, limit = 20 } = req.query;
+
+    let query = `
+      SELECT 
+        jr.*,
+        w.name as worker_name,
+        w.phone as worker_phone,
+        p.project_name,
+        p.project_address,
+        i.wage_amount,
+        i.original_wage,
+        i.wage_unit,
+        p.payment_type,
+        p.daily_wage,
+        p.original_wage as project_original_wage
+      FROM job_records jr
+      LEFT JOIN workers w ON jr.worker_id = w.id
+      LEFT JOIN projects p ON jr.project_id = p.id
+      LEFT JOIN invitations i ON jr.invitation_id = i.id
+      WHERE jr.company_id = $1
+    `;
+
+    const params = [companyId];
+    
+    if (status) {
+      // Special handling for 'completed' to include confirmed and paid jobs
+      if (status === 'completed') {
+        query += ` AND jr.status IN ('completed', 'confirmed', 'paid')`;
+      } else {
+        query += ` AND jr.status = $${params.length + 1}`;
+        params.push(status);
+      }
+    }
+
+    if (projectId) {
+      query += ` AND jr.project_id = $${params.length + 1}`;
+      params.push(projectId);
+    }
+
+    query += ` ORDER BY jr.created_at DESC`;
+    query += ` LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    params.push(limit, (page - 1) * limit);
+
+    const result = await db.query(query, params);
+
+    res.json({
+      success: true,
+      data: result.rows
+    });
+  } catch (error) {
+    console.error('Get company jobs error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get company jobs'
+    });
+  }
+};
+
+// 工人签到
+const workerCheckIn = async (req, res) => {
+  try {
+    const workerId = req.user.id;
+    const { jobRecordId, location } = req.body;
+
+    // 验证工作记录
+    const jobCheck = await db.query(
+      'SELECT * FROM job_records WHERE id = $1 AND worker_id = $2',
+      [jobRecordId, workerId]
+    );
+
+    if (jobCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Job record not found'
+      });
+    }
+
+    const job = jobCheck.rows[0];
+
+    // 检查状态是否正确
+    if (job.status !== 'accepted') {
+      return res.status(400).json({
+        success: false,
+        error: 'Can only check in for accepted jobs'
+      });
+    }
+
+    // 更新签到信息
+    const updateResult = await db.query(`
+      UPDATE job_records 
+      SET 
+        status = 'arrived',
+        arrival_time = CURRENT_TIMESTAMP,
+        arrival_location = $1,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2 AND worker_id = $3
+      RETURNING *
+    `, [JSON.stringify(location), jobRecordId, workerId]);
+
+    // 发送通知给企业
+    await notificationService.createNotification({
+      receiver_id: job.company_id,
+      receiver_type: 'company',
+      sender_id: workerId,
+      sender_type: 'worker',
+      type: 'worker_arrived',
+      title: '工人已到岗',
+      message: '工人已签到并到达工作地点',
+      metadata: {
+        jobRecordId,
+        arrivalTime: new Date().toISOString(),
+        location
+      }
+    });
+
+    res.json({
+      success: true,
+      data: updateResult.rows[0],
+      message: '签到成功'
+    });
+  } catch (error) {
+    console.error('Worker check in error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to check in'
+    });
+  }
+};
+
+// 工人开始工作
+const workerStartWork = async (req, res) => {
+  try {
+    const workerId = req.user.id;
+    const { jobRecordId } = req.body;
+
+    // 验证并更新
+    const updateResult = await db.query(`
+      UPDATE job_records 
+      SET 
+        status = 'working',
+        start_work_time = CURRENT_TIMESTAMP,
+        actual_start_time = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1 AND worker_id = $2 AND status = 'arrived'
+      RETURNING *
+    `, [jobRecordId, workerId]);
+
+    if (updateResult.rows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot start work. Please check in first.'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: updateResult.rows[0],
+      message: '已开始工作'
+    });
+  } catch (error) {
+    console.error('Worker start work error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to start work'
+    });
+  }
+};
+
+// 工人完成工作
+const workerCompleteWork = async (req, res) => {
+  try {
+    const workerId = req.user.id;
+    const { jobRecordId, completionNotes, photos = [] } = req.body;
+
+    // 验证工作记录
+    const jobCheck = await db.query(
+      'SELECT * FROM job_records WHERE id = $1 AND worker_id = $2 AND status = $3',
+      [jobRecordId, workerId, 'working']
+    );
+
+    if (jobCheck.rows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot complete work. Work must be in progress.'
+      });
+    }
+
+    const job = jobCheck.rows[0];
+
+    // 计算实际工作时长
+    const startTime = new Date(job.start_work_time);
+    const endTime = new Date();
+    const actualHours = (endTime - startTime) / (1000 * 60 * 60);
+
+    // 更新工作记录
+    const updateResult = await db.query(`
+      UPDATE job_records 
+      SET 
+        status = 'completed',
+        complete_time = CURRENT_TIMESTAMP,
+        actual_end_time = CURRENT_TIMESTAMP,
+        actual_hours = $1,
+        actual_duration_hours = $1,
+        completion_notes = $2,
+        work_photos = $3,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $4 AND worker_id = $5
+      RETURNING *
+    `, [
+      actualHours.toFixed(2),
+      completionNotes,
+      JSON.stringify(photos),
+      jobRecordId,
+      workerId
+    ]);
+
+    // 发送通知给企业
+    await notificationService.createNotification({
+      receiver_id: job.company_id,
+      receiver_type: 'company',
+      sender_id: workerId,
+      sender_type: 'worker',
+      type: 'work_completed',
+      title: '工作已完成',
+      message: '工人已完成工作，请确认',
+      metadata: {
+        jobRecordId,
+        completionTime: new Date().toISOString(),
+        actualHours: actualHours.toFixed(2),
+        notes: completionNotes
+      }
+    });
+
+    res.json({
+      success: true,
+      data: updateResult.rows[0],
+      message: '工作已标记为完成，等待企业确认'
+    });
+  } catch (error) {
+    console.error('Worker complete work error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to complete work'
+    });
+  }
+};
+
+// 企业支付工资
+const companyPayWork = async (req, res) => {
+  try {
+    const companyId = req.user.id;
+    const { 
+      jobRecordId, 
+      paymentMethod = 'transfer', // transfer, wechat, alipay, cash
+      transactionId,
+      paymentNotes
+    } = req.body;
+
+    // 验证工作记录
+    const jobCheck = await db.query(
+      'SELECT * FROM job_records WHERE id = $1 AND company_id = $2 AND status = $3',
+      [jobRecordId, companyId, 'confirmed']
+    );
+
+    if (jobCheck.rows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No confirmed work to pay'
+      });
+    }
+
+    const job = jobCheck.rows[0];
+
+    // 更新工作记录为已支付
+    const updateResult = await db.query(`
+      UPDATE job_records 
+      SET 
+        status = 'paid',
+        payment_status = 'paid',
+        payment_time = CURRENT_TIMESTAMP,
+        payment_method = $1,
+        transaction_id = $2,
+        payment_notes = $3,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $4 AND company_id = $5
+      RETURNING *
+    `, [
+      paymentMethod,
+      transactionId,
+      paymentNotes,
+      jobRecordId,
+      companyId
+    ]);
+
+    // 发送通知给工人
+    await notificationService.createNotification({
+      receiver_id: job.worker_id,
+      receiver_type: 'worker',
+      sender_id: companyId,
+      sender_type: 'company',
+      type: 'payment_received',
+      title: '工资已到账',
+      message: `您的工资 ¥${job.payment_amount} 已通过${paymentMethod === 'transfer' ? '银行转账' : paymentMethod === 'wechat' ? '微信' : paymentMethod === 'alipay' ? '支付宝' : '现金'}支付`,
+      metadata: {
+        jobRecordId,
+        paymentTime: new Date().toISOString(),
+        paymentAmount: job.payment_amount,
+        paymentMethod
+      }
+    });
+
+    res.json({
+      success: true,
+      data: updateResult.rows[0],
+      message: '支付成功'
+    });
+  } catch (error) {
+    console.error('Company pay work error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to process payment'
+    });
+  }
+};
+
+// 企业确认工作完成
+const companyConfirmWork = async (req, res) => {
+  try {
+    const companyId = req.user.id;
+    const { 
+      jobRecordId, 
+      qualityRating, 
+      confirmationNotes,
+      paymentAmount 
+    } = req.body;
+
+    // 验证工作记录
+    const jobCheck = await db.query(
+      'SELECT * FROM job_records WHERE id = $1 AND company_id = $2 AND status = $3',
+      [jobRecordId, companyId, 'completed']
+    );
+
+    if (jobCheck.rows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No completed work to confirm'
+      });
+    }
+
+    const job = jobCheck.rows[0];
+
+    // 更新工作记录
+    const updateResult = await db.query(`
+      UPDATE job_records 
+      SET 
+        status = 'confirmed',
+        confirm_time = CURRENT_TIMESTAMP,
+        quality_rating = $1,
+        confirmation_notes = $2,
+        payment_amount = $3,
+        payment_status = 'pending',
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $4 AND company_id = $5
+      RETURNING *
+    `, [
+      qualityRating,
+      confirmationNotes,
+      paymentAmount,
+      jobRecordId,
+      companyId
+    ]);
+
+    // 发送通知给工人
+    await notificationService.createNotification({
+      receiver_id: job.worker_id,
+      receiver_type: 'worker',
+      sender_id: companyId,
+      sender_type: 'company',
+      type: 'work_confirmed',
+      title: '工作已确认',
+      message: '企业已确认您的工作完成，工资将尽快发放',
+      metadata: {
+        jobRecordId,
+        confirmTime: new Date().toISOString(),
+        qualityRating,
+        paymentAmount
+      }
+    });
+
+    res.json({
+      success: true,
+      data: updateResult.rows[0],
+      message: '工作已确认，准备支付'
+    });
+  } catch (error) {
+    console.error('Company confirm work error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to confirm work'
+    });
+  }
+};
+
+// 获取工作详情
+const getJobDetail = async (req, res) => {
+  try {
+    const { jobRecordId } = req.params;
+    const userId = req.user.id;
+    const userType = req.user.type || 'worker';
+
+    let query = `
+      SELECT 
+        jr.*,
+        p.project_name,
+        p.project_address,
+        p.start_date as project_start_date,
+        p.estimated_duration as project_duration,
+        p.description as project_description,
+        c.company_name,
+        c.phone as company_phone,
+        c.contact_person as company_contact,
+        w.name as worker_name,
+        w.phone as worker_phone,
+        i.wage_amount,
+        i.original_wage,
+        i.wage_unit,
+        p.payment_type,
+        p.daily_wage,
+        p.original_wage as project_original_wage
+      FROM job_records jr
+      LEFT JOIN projects p ON jr.project_id = p.id
+      LEFT JOIN companies c ON jr.company_id = c.id
+      LEFT JOIN workers w ON jr.worker_id = w.id
+      LEFT JOIN invitations i ON jr.invitation_id = i.id
+      WHERE jr.id = $1
+    `;
+
+    // 验证访问权限
+    if (userType === 'worker') {
+      query += ' AND jr.worker_id = $2';
+    } else {
+      query += ' AND jr.company_id = $2';
+    }
+
+    const result = await db.query(query, [jobRecordId, userId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Job record not found or access denied'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Get job detail error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get job detail'
+    });
+  }
+};
+
+// 上传工作照片
+const uploadWorkPhoto = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { jobRecordId, photoUrl, photoType = 'progress', description } = req.body;
+
+    // 验证工作记录权限
+    const jobCheck = await db.query(
+      'SELECT * FROM job_records WHERE id = $1 AND (worker_id = $2 OR company_id = $2)',
+      [jobRecordId, userId]
+    );
+
+    if (jobCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Job record not found or access denied'
+      });
+    }
+
+    // 插入照片记录
+    const insertResult = await db.query(`
+      INSERT INTO work_photos (
+        job_record_id,
+        photo_url,
+        photo_type,
+        description,
+        uploaded_by
+      ) VALUES ($1, $2, $3, $4, $5)
+      RETURNING *
+    `, [jobRecordId, photoUrl, photoType, description, userId]);
+
+    // 更新job_records的work_photos字段
+    await db.query(`
+      UPDATE job_records 
+      SET work_photos = (
+        SELECT jsonb_agg(
+          jsonb_build_object(
+            'id', id,
+            'url', photo_url,
+            'type', photo_type,
+            'description', description,
+            'uploadedAt', uploaded_at
+          )
+        )
+        FROM work_photos
+        WHERE job_record_id = $1 AND is_deleted = false
+      )
+      WHERE id = $1
+    `, [jobRecordId]);
+
+    res.json({
+      success: true,
+      data: insertResult.rows[0],
+      message: '照片上传成功'
+    });
+  } catch (error) {
+    console.error('Upload work photo error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to upload photo'
+    });
+  }
+};
+
+module.exports = {
+  getWorkerJobs,
+  getCompanyJobs,
+  workerCheckIn,
+  workerStartWork,
+  workerCompleteWork,
+  companyConfirmWork,
+  companyPayWork,
+  getJobDetail,
+  uploadWorkPhoto
+};

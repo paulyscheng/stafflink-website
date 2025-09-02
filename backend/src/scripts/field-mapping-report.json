@@ -1,0 +1,350 @@
+{
+  "timestamp": "2025-08-23T16:54:29.135Z",
+  "database_structure": {
+    "notifications": [
+      "id",
+      "user_id",
+      "user_type",
+      "type",
+      "title",
+      "message",
+      "data",
+      "read",
+      "created_at",
+      "updated_at"
+    ],
+    "invitations": [
+      "id",
+      "company_id",
+      "worker_id",
+      "project_id",
+      "status",
+      "invited_at",
+      "responded_at",
+      "response_note",
+      "wage_amount",
+      "start_date",
+      "end_date",
+      "created_at",
+      "updated_at",
+      "original_wage",
+      "wage_unit"
+    ],
+    "job_records": [
+      "id",
+      "worker_id",
+      "company_id",
+      "project_id",
+      "invitation_id",
+      "start_date",
+      "end_date",
+      "actual_hours",
+      "wage_amount",
+      "status",
+      "worker_confirmed",
+      "company_confirmed",
+      "payment_status",
+      "created_at",
+      "updated_at"
+    ],
+    "projects": [
+      "id",
+      "company_id",
+      "title",
+      "description",
+      "location",
+      "latitude",
+      "longitude",
+      "start_date",
+      "end_date",
+      "daily_wage",
+      "required_workers",
+      "hired_workers",
+      "work_hours",
+      "work_type",
+      "urgency_level",
+      "status",
+      "created_at",
+      "updated_at",
+      "project_name",
+      "project_address",
+      "project_type",
+      "priority",
+      "work_description",
+      "experience_level",
+      "time_nature",
+      "start_time",
+      "end_time",
+      "working_days",
+      "time_notes",
+      "payment_type",
+      "budget_range",
+      "estimated_duration",
+      "selected_workers",
+      "notification_methods",
+      "urgency",
+      "original_wage",
+      "wage_unit"
+    ],
+    "workers": [
+      "id",
+      "name",
+      "phone",
+      "id_card",
+      "age",
+      "gender",
+      "address",
+      "rating",
+      "total_jobs",
+      "completed_jobs",
+      "total_earnings",
+      "status",
+      "experience_years",
+      "profile_photo",
+      "created_at",
+      "updated_at"
+    ],
+    "companies": [
+      "id",
+      "company_name",
+      "contact_person",
+      "phone",
+      "email",
+      "address",
+      "business_license",
+      "rating",
+      "total_projects",
+      "status",
+      "created_at",
+      "updated_at"
+    ]
+  },
+  "field_corrections": {
+    "receiver_id": {
+      "table": "notifications",
+      "correct": "user_id"
+    },
+    "receiver_type": {
+      "table": "notifications",
+      "correct": "user_type"
+    },
+    "sender_id": {
+      "table": "notifications",
+      "correct": null,
+      "note": "应存储在data JSONB字段中"
+    },
+    "sender_type": {
+      "table": "notifications",
+      "correct": null,
+      "note": "应存储在data JSONB字段中"
+    },
+    "response_message": {
+      "table": "invitations",
+      "correct": "response_note"
+    },
+    "wage_offer": {
+      "table": "invitations",
+      "correct": "wage_amount"
+    },
+    "wage_type": {
+      "table": "invitations",
+      "correct": "wage_unit"
+    },
+    "work_date": {
+      "table": "job_records",
+      "correct": "start_date"
+    },
+    "payment_amount": {
+      "table": "job_records",
+      "correct": "wage_amount"
+    },
+    "payment_type": {
+      "table": "job_records",
+      "correct": null,
+      "note": "此字段在job_records表中不存在，需要从projects表获取"
+    },
+    "work_content": {
+      "table": "projects",
+      "correct": "description",
+      "note": "projects表同时有description和work_description字段"
+    },
+    "workers_count": {
+      "table": "projects",
+      "correct": "required_workers"
+    }
+  },
+  "fixed_files": [
+    {
+      "file": "src/controllers/invitationController.js",
+      "fixes": [
+        "response_message → response_note (5处)",
+        "wage_offer → wage_amount (7处)",
+        "wage_type → wage_unit (6处)"
+      ],
+      "critical": true
+    },
+    {
+      "file": "src/controllers/jobController.js",
+      "fixes": [
+        "payment_amount → wage_amount (2处)",
+        "payment_amount → wage_amount (1处)",
+        "⚠️  payment_type 此字段在job_records表中不存在，需要从projects表获取 (3处)",
+        "⚠️  payment_type 此字段在job_records表中不存在，需要从projects表获取 (3处)",
+        "⚠️  payment_type 此字段在job_records表中不存在，需要从projects表获取 (3处)"
+      ],
+      "critical": true
+    },
+    {
+      "file": "src/routes/invitations.js",
+      "fixes": [
+        "response_message → response_note (1处)",
+        "wage_offer → wage_amount (1处)",
+        "wage_type → wage_unit (1处)"
+      ],
+      "critical": true
+    },
+    {
+      "file": "src/scripts/createTestNotifications.js",
+      "fixes": [
+        "receiver_id → user_id (6处)",
+        "receiver_type → user_type (6处)",
+        "receiver_type → user_type (1处)",
+        "⚠️  sender_id 应存储在data JSONB字段中 (2处)",
+        "⚠️  sender_id 应存储在data JSONB字段中 (1处)",
+        "⚠️  sender_id 应存储在data JSONB字段中 (1处)",
+        "⚠️  sender_type 应存储在data JSONB字段中 (2处)",
+        "⚠️  sender_type 应存储在data JSONB字段中 (1处)",
+        "⚠️  sender_type 应存储在data JSONB字段中 (1处)"
+      ],
+      "critical": false
+    },
+    {
+      "file": "src/scripts/createNotificationsForZhang.js",
+      "fixes": [
+        "receiver_id → user_id (3处)",
+        "receiver_type → user_type (3处)",
+        "⚠️  sender_id 应存储在data JSONB字段中 (2处)",
+        "⚠️  sender_id 应存储在data JSONB字段中 (1处)",
+        "⚠️  sender_id 应存储在data JSONB字段中 (1处)",
+        "⚠️  sender_type 应存储在data JSONB字段中 (2处)",
+        "⚠️  sender_type 应存储在data JSONB字段中 (1处)",
+        "⚠️  sender_type 应存储在data JSONB字段中 (1处)"
+      ],
+      "critical": false
+    },
+    {
+      "file": "src/scripts/updateNotificationsTable.js",
+      "fixes": [
+        "receiver_id → user_id (5处)",
+        "receiver_type → user_type (6处)",
+        "⚠️  sender_id 应存储在data JSONB字段中 (4处)",
+        "⚠️  sender_id 应存储在data JSONB字段中 (1处)",
+        "⚠️  sender_id 应存储在data JSONB字段中 (1处)",
+        "⚠️  sender_type 应存储在data JSONB字段中 (4处)",
+        "⚠️  sender_type 应存储在data JSONB字段中 (1处)",
+        "⚠️  sender_type 应存储在data JSONB字段中 (1处)"
+      ],
+      "critical": false
+    },
+    {
+      "file": "src/scripts/createNotificationsTable.js",
+      "fixes": [
+        "receiver_id → user_id (5处)",
+        "receiver_type → user_type (6处)",
+        "⚠️  sender_id 应存储在data JSONB字段中 (3处)",
+        "⚠️  sender_id 应存储在data JSONB字段中 (1处)",
+        "⚠️  sender_id 应存储在data JSONB字段中 (1处)",
+        "⚠️  sender_type 应存储在data JSONB字段中 (4处)",
+        "⚠️  sender_type 应存储在data JSONB字段中 (1处)",
+        "⚠️  sender_type 应存储在data JSONB字段中 (1处)"
+      ],
+      "critical": false
+    },
+    {
+      "file": "src/scripts/acceptTestInvitation.js",
+      "fixes": [
+        "response_message → response_note (1处)",
+        "wage_offer → wage_amount (1处)",
+        "wage_type → wage_unit (1处)",
+        "work_date → start_date (1处)",
+        "payment_amount → wage_amount (1处)",
+        "⚠️  payment_type 此字段在job_records表中不存在，需要从projects表获取 (1处)"
+      ],
+      "critical": false
+    },
+    {
+      "file": "src/scripts/createTestInvitations.js",
+      "fixes": [
+        "wage_offer → wage_amount (2处)",
+        "wage_type → wage_unit (2处)",
+        "⚠️  payment_type 此字段在job_records表中不存在，需要从projects表获取 (2处)"
+      ],
+      "critical": false
+    },
+    {
+      "file": "src/scripts/createPendingInvitations.js",
+      "fixes": [
+        "wage_offer → wage_amount (2处)",
+        "wage_offer → wage_amount (1处)",
+        "wage_type → wage_unit (4处)"
+      ],
+      "critical": false
+    },
+    {
+      "file": "src/scripts/createRejectedInvitations.js",
+      "fixes": [
+        "wage_offer → wage_amount (2处)",
+        "wage_type → wage_unit (2处)"
+      ],
+      "critical": false
+    },
+    {
+      "file": "src/scripts/createMoreTestJobs.js",
+      "fixes": [
+        "wage_offer → wage_amount (2处)",
+        "wage_type → wage_unit (2处)",
+        "work_date → start_date (2处)",
+        "payment_amount → wage_amount (3处)",
+        "⚠️  payment_type 此字段在job_records表中不存在，需要从projects表获取 (3处)",
+        "⚠️  payment_type 此字段在job_records表中不存在，需要从projects表获取 (1处)",
+        "⚠️  payment_type 此字段在job_records表中不存在，需要从projects表获取 (1处)"
+      ],
+      "critical": false
+    },
+    {
+      "file": "src/scripts/createTestJobRecords.js",
+      "fixes": [
+        "work_date → start_date (2处)",
+        "payment_amount → wage_amount (2处)",
+        "⚠️  payment_type 此字段在job_records表中不存在，需要从projects表获取 (2处)",
+        "⚠️  payment_type 此字段在job_records表中不存在，需要从projects表获取 (1处)",
+        "⚠️  payment_type 此字段在job_records表中不存在，需要从projects表获取 (1处)"
+      ],
+      "critical": false
+    },
+    {
+      "file": "src/scripts/testWorkerJobsAPI.js",
+      "fixes": [
+        "wage_offer → wage_amount (1处)",
+        "wage_type → wage_unit (1处)",
+        "work_date → start_date (1处)",
+        "payment_amount → wage_amount (1处)",
+        "⚠️  payment_type 此字段在job_records表中不存在，需要从projects表获取 (1处)",
+        "⚠️  payment_type 此字段在job_records表中不存在，需要从projects表获取 (1处)",
+        "⚠️  payment_type 此字段在job_records表中不存在，需要从projects表获取 (1处)"
+      ],
+      "critical": false
+    },
+    {
+      "file": "src/scripts/acceptTestInvitationFixed.js",
+      "fixes": [
+        "wage_offer → wage_amount (1处)",
+        "wage_type → wage_unit (1处)",
+        "work_date → start_date (1处)",
+        "payment_amount → wage_amount (1处)",
+        "⚠️  payment_type 此字段在job_records表中不存在，需要从projects表获取 (1处)"
+      ],
+      "critical": false
+    }
+  ]
+}

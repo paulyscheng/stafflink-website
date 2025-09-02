@@ -67,6 +67,7 @@ app.use('/api/invitations', invitationRoutes);
 app.use('/api/skills', skillRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/debug', debugRoutes);
+app.use('/api/jobs', require('./src/routes/jobRoutes'));
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {

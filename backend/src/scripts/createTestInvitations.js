@@ -96,7 +96,7 @@ async function createTestInvitations() {
         const result = await db.query(`
           INSERT INTO invitations (
             project_id, company_id, worker_id,
-            message, wage_offer, wage_type,
+            message, wage_amount, wage_unit,
             status, expires_at
           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
           RETURNING id
@@ -157,7 +157,7 @@ async function createTestInvitations() {
           const result = await db.query(`
             INSERT INTO invitations (
               project_id, company_id, worker_id,
-              message, wage_offer, wage_type,
+              message, wage_amount, wage_unit,
               status, expires_at
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             ON CONFLICT (project_id, worker_id) DO NOTHING

@@ -1,5 +1,6 @@
 const db = require('../config/database');
 const logger = require('../utils/logger');
+const SkillService = require('../services/skillService');
 
 const createProject = async (req, res, next) => {
   try {
@@ -35,6 +36,27 @@ const createProject = async (req, res, next) => {
       });
     }
 
+    // Parse original wage from budget_range
+    const originalWage = parseFloat(budget_range) || 0;
+    
+    // Determine wage unit based on payment type
+    let wageUnit = 'day';
+    if (payment_type === 'hourly') wageUnit = 'hour';
+    else if (payment_type === 'fixed') wageUnit = 'total';
+    
+    // Calculate daily wage based on payment type
+    let dailyWage = 0;
+    if (payment_type === 'daily') {
+      dailyWage = originalWage;
+    } else if (payment_type === 'hourly') {
+      // Assume 8 hours per day for hourly rate
+      dailyWage = originalWage * 8;
+    } else if (payment_type === 'fixed') {
+      // For fixed payment, calculate daily rate based on duration
+      const days = estimated_duration || 1;
+      dailyWage = originalWage / days;
+    }
+
     // Create project
     const query = `
       INSERT INTO projects (
@@ -42,8 +64,8 @@ const createProject = async (req, res, next) => {
         required_workers, work_description, experience_level, time_nature,
         start_date, end_date, start_time, end_time, working_days, time_notes,
         payment_type, budget_range, estimated_duration, selected_workers,
-        notification_methods, status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+        notification_methods, status, daily_wage, original_wage, wage_unit
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
       RETURNING *
     `;
 
@@ -54,7 +76,7 @@ const createProject = async (req, res, next) => {
       working_days ? JSON.stringify(working_days) : null,
       time_notes, payment_type, budget_range, estimated_duration,
       JSON.stringify(selected_workers), JSON.stringify(notification_methods),
-      'draft'
+      'draft', dailyWage, originalWage, wageUnit
     ];
 
     const result = await db.query(query, values);
@@ -63,118 +85,94 @@ const createProject = async (req, res, next) => {
     // Add project skills if provided
     logger.info(`Attempting to add ${skills ? skills.length : 0} skills to project ${project.id}`);
     if (skills && skills.length > 0) {
-      // Skill ID mapping - maps frontend IDs directly to database skill IDs
-      const skillIdMapping = {
-        'plumbingInstall': 75, // 管道安装
-        'electrician': 79, // 电工
-        'carpentry': 76, // 木工
-        'painting': 77, // 刷漆
-        'tiling': 78, // 贴砖
-        'masonry': 89, // 泥瓦工
-        'waterproofing': 90, // 防水
-        'plumber': 93, // 水管工
-        'welding': 80, // 焊工
-        'rebarWorker': 96, // 钢筋工
-        'concreteWorker': 97, // 混凝土工
-        'scaffoldWorker': 98, // 架子工
-        'ceilingInstall': 91, // 吊顶安装
-        'glassInstall': 92, // 玻璃安装
-        'locksmith': 94, // 锁匠
-        'applianceRepair': 95, // 家电维修
-        'surveyor': 99, // 测量员
-        'barista': 100, // 咖啡师
-        'waiter': 101, // 服务员
-        'cashier': 102, // 收银员
-        'chef': 103, // 厨师
-        'kitchenHelper': 104, // 厨房助手
-        'dishwasher': 105, // 洗碗工
-        'bbqChef': 106, // 烧烤师
-        'foodRunner': 107, // 传菜员
-        'cleaner': 81, // 清洁工
-        'operator': 82, // 操作员
-        'qualityInspector': 111, // 质检员
-        'packagingWorker': 112, // 包装工
-        'assemblyWorker': 109, // 装配工
-        'solderer': 110, // 焊接工
-        'machineOperator': 113, // 机器操作员
-        'sewingWorker': 114, // 缝纫工
-        'cuttingWorker': 115, // 裁剪工
-        'ironingWorker': 116, // 熨烫工
-        'foodProcessor': 117, // 食品加工工
-        'latheMachinist': 118, // 车床工
-        'assembler': 119, // 装配员
-        'materialHandler': 120, // 物料员
-        'printer': 121, // 印刷工
-        'bookbinder': 122, // 装订工
-        'deliveryWorker': 123, // 送货员
-        'loader': 124, // 装卸工
-        'sorter': 125, // 分拣员
-        'driver': 126, // 司机
-        'courier': 127, // 快递员
-        'stocker': 128, // 理货员
-        'forkliftOperator': 129, // 叉车工
-        'warehouseKeeper': 130, // 仓库管理员
-        'securityGuard': 132, // 保安
-        'gardener': 133, // 园艺工
-        'housekeeper': 134 // 家政服务
-      };
-      
-      // Insert project skills using direct ID mapping
-      const skillPromises = skills.map(skill => {
-        const skillId = skillIdMapping[skill.skill_id];
+      try {
+        // Get skill IDs dynamically from database
+        const frontendKeys = skills.map(s => s.skill_id);
+        const skillMapping = await SkillService.mapFrontendSkillsToIds(frontendKeys);
         
-        if (!skillId) {
-          logger.warn(`Unknown skill ID from frontend: ${skill.skill_id}`);
-          return Promise.resolve(); // Skip unknown skills
-        }
+        const skillPromises = skills.map(async skill => {
+          const skillId = skillMapping[skill.skill_id];
+          
+          if (!skillId) {
+            // Try to find skill by name if mapping fails
+            const alternativeId = await SkillService.mapFrontendSkillToId(skill.skill_id);
+            if (!alternativeId) {
+              logger.warn(`Unknown skill: ${skill.skill_id}`);
+              return null;
+            }
+            skillId = alternativeId;
+          }
+          
+          logger.info(`Inserting skill ID ${skillId} for project ${project.id}`);
+          
+          const insertQuery = `
+            INSERT INTO project_skills (project_id, skill_id, required_level, is_mandatory)
+            VALUES ($1, $2, $3, $4)
+          `;
+          
+          return db.query(insertQuery, [
+            project.id,
+            skillId,
+            skill.required_level || 1,
+            skill.is_mandatory !== false
+          ]);
+        });
         
-        logger.info(`Inserting skill ID ${skillId} for project ${project.id}`);
-        
-        const insertQuery = `
-          INSERT INTO project_skills (project_id, skill_id, required_level, is_mandatory)
-          VALUES ($1, $2, $3, $4)
-        `;
-        return db.query(insertQuery, [
-          project.id, 
-          skillId, // Use the direct ID mapping
-          skill.required_level || 1, 
-          skill.is_mandatory !== false
-        ]);
-      });
-      
-      const results = await Promise.all(skillPromises.filter(p => p)); // Filter out undefined promises
-      logger.info(`Successfully inserted ${results.length} skills for project ${project.id}`);
+        const results = await Promise.all(skillPromises.filter(p => p));
+        logger.info(`Successfully inserted ${results.length} skills for project ${project.id}`);
+      } catch (skillError) {
+        logger.error('Error adding project skills:', skillError);
+        // Don't fail the entire project creation if skills fail
+      }
     }
 
     // 如果有选择的工人，自动创建邀请
     if (selected_workers && selected_workers.length > 0) {
       try {
-        const invitationPromises = selected_workers.map(worker_id => {
-          const invitationQuery = `
-            INSERT INTO invitations (project_id, company_id, worker_id, wage_offer, wage_type, message)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            ON CONFLICT (project_id, worker_id) DO NOTHING
-            RETURNING *
-          `;
-          
-          // 根据payment_type决定wage_type
-          let wage_type = 'fixed';
-          if (payment_type === 'hourly') wage_type = 'hourly';
-          else if (payment_type === 'daily') wage_type = 'daily';
-          
-          return db.query(invitationQuery, [
-            project.id,
-            req.user.id,
-            worker_id,
-            parseFloat(budget_range.split('-')[0]) || null, // 使用预算范围的最小值作为工资offer
-            wage_type,
-            `您被邀请参与项目：${project_name}`
-          ]);
+        // Filter out invalid worker IDs and ensure they are valid UUIDs
+        const validWorkerIds = selected_workers.filter(worker_id => {
+          // Check if it's a valid UUID format
+          const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+          if (typeof worker_id === 'string' && uuidRegex.test(worker_id)) {
+            return true;
+          }
+          logger.warn(`Invalid worker ID format: ${worker_id} (expected UUID)`);
+          return false;
         });
-        
-        const invitationResults = await Promise.all(invitationPromises);
-        const createdInvitations = invitationResults.filter(r => r.rows.length > 0).length;
-        logger.info(`Created ${createdInvitations} invitations for project ${project.id}`);
+
+        if (validWorkerIds.length === 0) {
+          logger.warn('No valid worker IDs provided for invitations');
+        } else {
+          const invitationPromises = validWorkerIds.map(worker_id => {
+            const invitationQuery = `
+              INSERT INTO invitations (
+                project_id, company_id, worker_id, 
+                wage_amount, original_wage, wage_unit,
+                status, start_date, end_date
+              )
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+              ON CONFLICT (project_id, worker_id) DO NOTHING
+              RETURNING *
+            `;
+            
+            // 同时保存原始薪资和计算后的日薪
+            return db.query(invitationQuery, [
+              project.id,
+              req.user.id,
+              worker_id,
+              dailyWage,
+              originalWage,
+              wageUnit,
+              'pending',
+              start_date,
+              end_date
+            ]);
+          });
+          
+          const invitationResults = await Promise.all(invitationPromises);
+          const createdInvitations = invitationResults.filter(r => r.rows.length > 0).length;
+          logger.info(`Created ${createdInvitations} invitations for project ${project.id}`);
+        }
       } catch (invitationError) {
         logger.error('Error creating invitations:', invitationError);
         // 不阻塞项目创建，继续返回成功
@@ -232,11 +230,24 @@ const getCompanyProjects = async (req, res, next) => {
     // Get projects with pagination
     const projectsQuery = `
       SELECT 
-        id, project_name, project_address, project_type, priority,
-        required_workers, work_description, experience_level,
-        start_date, end_date, start_time, end_time,
-        payment_type, budget_range, status, urgency,
-        created_at, updated_at
+        id, 
+        title as project_name, 
+        location as project_address, 
+        work_type as project_type, 
+        urgency_level as priority,
+        required_workers, 
+        description as work_description, 
+        'intermediate' as experience_level,
+        start_date, 
+        end_date, 
+        work_hours as start_time, 
+        work_hours as end_time,
+        'daily' as payment_type, 
+        daily_wage::text as budget_range, 
+        status, 
+        urgency_level as urgency,
+        created_at, 
+        updated_at
       FROM projects 
       WHERE ${whereClause}
       ORDER BY created_at DESC
@@ -326,7 +337,7 @@ const getProject = async (req, res, next) => {
       SELECT 
         status,
         COUNT(*) as count
-      FROM job_invitations
+      FROM invitations
       WHERE project_id = $1
       GROUP BY status
     `;
