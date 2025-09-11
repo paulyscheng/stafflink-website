@@ -54,7 +54,7 @@ const CompanyLoginForm = ({ onLoginSuccess, onSwitchToRegister }) => {
     setLoading(true);
     
     try {
-      const response = await ApiService.sendCode(formData.phoneNumber);
+      const response = await ApiService.sendCode(formData.phoneNumber, 'company');
       
       if (response && response.success) {
         setCodeSent(true);

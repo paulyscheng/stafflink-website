@@ -10,15 +10,20 @@ import {
   ScrollView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
+import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useModal } from '../../../../../shared/components/Modal/ModalService';
 import ProgressBar from '../ProgressBar';
+import CompanySizeSelector from './CompanySizeSelector';
+import ImageUploader from './ImageUploader';
 
 const Step2CompanyInfo = ({ onNext, onBack, initialData }) => {
   const [formData, setFormData] = useState({
     companyName: initialData?.companyName || '',
     businessAddress: initialData?.businessAddress || '',
     companyDescription: initialData?.companyDescription || '',
+    companySize: initialData?.companySize || '',
+    logoUrl: initialData?.logoUrl || '',
   });
   const { t } = useLanguage();
   const modal = useModal();
@@ -32,12 +37,12 @@ const Step2CompanyInfo = ({ onNext, onBack, initialData }) => {
 
   const handleNext = () => {
     if (!formData.companyName.trim()) {
-      modal.error(t('error'), t('pleaseEnterCompanyName'));
+      modal.error('错误', '请输入企业名称');
       return;
     }
 
     if (!formData.businessAddress.trim()) {
-      modal.error(t('error'), t('pleaseEnterBusinessAddress'));
+      modal.error('错误', '请输入企业地址');
       return;
     }
 
@@ -60,54 +65,75 @@ const Step2CompanyInfo = ({ onNext, onBack, initialData }) => {
 
         {/* Page Title */}
         <View style={styles.headerContainer}>
-          <Text style={styles.title}>{t('tellUsAboutCompany')}</Text>
-          <Text style={styles.description}>{t('companyInfoHelpUs')}</Text>
+          <Text style={styles.title}>完善企业信息</Text>
+          <Text style={styles.description}>让我们更好地了解您的企业，以便提供更精准的服务</Text>
         </View>
+
+        {/* Company Logo Upload */}
+        <ImageUploader
+          value={formData.logoUrl}
+          onValueChange={(value) => handleInputChange('logoUrl', value)}
+          label="企业Logo（可选）"
+          placeholder="上传企业logo"
+        />
 
         {/* Company Name Input */}
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>{t('companyNameRequired')}</Text>
-          <TextInput
-            style={styles.input}
-            placeholder={t('enterCompanyName')}
-            value={formData.companyName}
-            onChangeText={(value) => handleInputChange('companyName', value)}
-            autoCapitalize="words"
-          />
+          <Text style={styles.label}>企业名称 *</Text>
+          <View style={styles.inputWrapper}>
+            <MaterialIcon name="business" size={20} color="#6b7280" style={styles.inputIcon} />
+            <TextInput
+              style={styles.inputWithIcon}
+              placeholder="请输入企业名称"
+              value={formData.companyName}
+              onChangeText={(value) => handleInputChange('companyName', value)}
+              autoCapitalize="words"
+            />
+          </View>
         </View>
 
 
+        {/* Company Size Selector */}
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>企业规模（可选）</Text>
+          <CompanySizeSelector
+            value={formData.companySize}
+            onValueChange={(value) => handleInputChange('companySize', value)}
+            placeholder="请选择企业规模"
+          />
+        </View>
+
         {/* Business Address Input */}
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>{t('businessAddressRequired')}</Text>
+          <Text style={styles.label}>企业地址 *</Text>
           <View style={styles.addressContainer}>
             <TextInput
               style={styles.addressInput}
-              placeholder={t('enterBusinessAddress')}
+              placeholder="请输入详细地址"
               value={formData.businessAddress}
               onChangeText={(value) => handleInputChange('businessAddress', value)}
               multiline={true}
               numberOfLines={2}
             />
             <TouchableOpacity style={styles.locationButton}>
-              <Icon name="map-marker" size={16} color="#6b7280" />
+              <MaterialIcon name="location-on" size={20} color="#6b7280" />
             </TouchableOpacity>
           </View>
         </View>
 
         {/* Company Description Input */}
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>{t('companyDescription')} {t('optional')}</Text>
+          <Text style={styles.label}>企业简介（可选）</Text>
           <TextInput
             style={styles.textArea}
-            placeholder={t('briefDescriptionCompany')}
+            placeholder="简单介绍您的企业"
             value={formData.companyDescription}
             onChangeText={(value) => handleInputChange('companyDescription', value)}
             multiline={true}
             numberOfLines={4}
-            maxLength={100}
+            maxLength={200}
           />
-          <Text style={styles.characterCount}>{formData.companyDescription.length}/100</Text>
+          <Text style={styles.characterCount}>{formData.companyDescription.length}/200</Text>
         </View>
 
         {/* Navigation Buttons */}
@@ -116,14 +142,14 @@ const Step2CompanyInfo = ({ onNext, onBack, initialData }) => {
             style={styles.backButton}
             onPress={onBack}
           >
-            <Text style={styles.backButtonText}>{t('back')}</Text>
+            <Text style={styles.backButtonText}>上一步</Text>
           </TouchableOpacity>
           
           <TouchableOpacity
             style={styles.nextButton}
             onPress={handleNext}
           >
-            <Text style={styles.nextButtonText}>{t('nextStep')}</Text>
+            <Text style={styles.nextButtonText}>下一步</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -166,6 +192,24 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#374151',
     marginBottom: 8,
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#ffffff',
+  },
+  inputIcon: {
+    marginRight: 12,
+  },
+  inputWithIcon: {
+    flex: 1,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: '#374151',
   },
   input: {
     borderWidth: 1,
@@ -214,7 +258,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     color: '#374151',
     textAlignVertical: 'top',
-    minHeight: 100,
+    minHeight: 120,
   },
   characterCount: {
     fontSize: 12,

@@ -212,6 +212,7 @@ const getWorkerInvitations = async (req, res) => {
         c.contact_person,
         c.phone as company_phone,
         c.rating as company_rating,
+        c.address as company_address,
         p.project_name,
         p.project_address,
         p.project_type,
@@ -220,10 +221,31 @@ const getWorkerInvitations = async (req, res) => {
         p.start_time,
         p.end_time,
         p.budget_range,
-        p.work_description
+        p.work_description,
+        p.required_workers,
+        p.experience_level,
+        p.priority,
+        p.estimated_duration,
+        p.time_nature,
+        p.payment_type,
+        p.original_wage,
+        p.wage_unit,
+        -- 获取项目技能
+        COALESCE(
+          json_agg(
+            DISTINCT jsonb_build_object(
+              'skill_id', s.id,
+              'skill_name', s.name,
+              'skill_category', s.category
+            )
+          ) FILTER (WHERE s.id IS NOT NULL),
+          '[]'::json
+        ) as required_skills
       FROM invitations i
       JOIN companies c ON i.company_id = c.id
       JOIN projects p ON i.project_id = p.id
+      LEFT JOIN project_skills ps ON ps.project_id = p.id
+      LEFT JOIN skills s ON s.id = ps.skill_id
       WHERE i.worker_id = $1
     `;
 
@@ -234,7 +256,19 @@ const getWorkerInvitations = async (req, res) => {
       params.push(status);
     }
 
-    query += ' ORDER BY i.invited_at DESC';
+    // 添加GROUP BY来支持聚合函数
+    query += ` 
+      GROUP BY i.id, i.project_id, i.company_id, i.worker_id, i.status, 
+               i.wage_amount, i.original_wage, i.wage_unit,
+               i.created_at, i.invited_at, i.responded_at, i.response_note,
+               i.start_date, i.end_date,
+               c.company_name, c.contact_person, c.phone, c.rating, c.address,
+               p.project_name, p.project_address, p.project_type, p.start_date, 
+               p.end_date, p.start_time, p.end_time, p.budget_range, 
+               p.work_description, p.required_workers, p.experience_level,
+               p.priority, p.estimated_duration, p.time_nature, p.payment_type,
+               p.original_wage, p.wage_unit
+      ORDER BY i.invited_at DESC`;
 
     const result = await db.query(query, params);
     res.json(result.rows);

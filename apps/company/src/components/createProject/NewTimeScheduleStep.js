@@ -12,6 +12,7 @@ import {
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useModal } from '../../../../../shared/components/Modal/ModalService';
+import CostPreviewCard from './CostPreviewCard';
 
 // Modal components defined first
 const DatePickerModal = ({ visible, onClose, onSelect, selectedDate, generateDateOptions, styles, t }) => (
@@ -51,42 +52,67 @@ const DatePickerModal = ({ visible, onClose, onSelect, selectedDate, generateDat
   </Modal>
 );
 
-const TimePickerModal = ({ visible, onClose, onSelect, selectedTime, generateTimeOptions, styles, t }) => (
-  <Modal visible={visible} transparent animationType="slide">
-    <View style={styles.modalOverlay}>
-      <View style={styles.modalContainer}>
-        <View style={styles.modalHeader}>
-          <Text style={styles.modalTitle}>{t('selectTime')}</Text>
-          <TouchableOpacity onPress={onClose}>
-            <Icon name="times" size={20} color="#6b7280" />
-          </TouchableOpacity>
-        </View>
-        <ScrollView style={styles.modalContent}>
-          {generateTimeOptions().map((time) => (
+const TimePickerModal = ({ visible, onClose, onSelect, selectedTime, generateTimeOptions, type, styles, t }) => {
+  const timeOptions = generateTimeOptions(type);
+  const hasResetOption = timeOptions.some(option => option.value === 'reset');
+  
+  return (
+    <Modal visible={visible} transparent animationType="slide">
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{t('selectTime')}</Text>
+            <TouchableOpacity onPress={onClose}>
+              <Icon name="times" size={20} color="#6b7280" />
+            </TouchableOpacity>
+          </View>
+          
+          {/* Clear button if time is already selected */}
+          {selectedTime && !hasResetOption && (
             <TouchableOpacity
-              key={time.value}
-              style={[
-                styles.timeOption,
-                selectedTime === time.value && styles.selectedTimeOption
-              ]}
+              style={styles.clearTimeButton}
               onPress={() => {
-                onSelect(time.value);
+                onSelect('');
                 onClose();
               }}
             >
-              <Text style={[
-                styles.timeOptionText,
-                selectedTime === time.value && styles.selectedTimeOptionText
-              ]}>
-                {time.label}
-              </Text>
+              <Icon name="close-circle" size={20} color="#ef4444" />
+              <Text style={styles.clearTimeText}>清除已选时间</Text>
             </TouchableOpacity>
-          ))}
-        </ScrollView>
+          )}
+          
+          <ScrollView style={styles.modalContent}>
+            {timeOptions.map((time) => (
+              <TouchableOpacity
+                key={time.value}
+                style={[
+                  styles.timeOption,
+                  selectedTime === time.value && styles.selectedTimeOption,
+                  time.value === 'reset' && styles.resetTimeOption
+                ]}
+                onPress={() => {
+                  if (time.value !== 'reset') {
+                    onSelect(time.value);
+                    onClose();
+                  }
+                }}
+                disabled={time.value === 'reset'}
+              >
+                <Text style={[
+                  styles.timeOptionText,
+                  selectedTime === time.value && styles.selectedTimeOptionText,
+                  time.value === 'reset' && styles.resetTimeText
+                ]}>
+                  {time.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
       </View>
-    </View>
-  </Modal>
-);
+    </Modal>
+  );
+};
 
 const NewTimeScheduleStep = ({ initialData, onNext, onBack }) => {
   const [formData, setFormData] = useState({
@@ -108,10 +134,36 @@ const NewTimeScheduleStep = ({ initialData, onNext, onBack }) => {
   const modal = useModal();
 
   const handleInputChange = (field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    setFormData(prev => {
+      const newData = { ...prev, [field]: value };
+      
+      // Handle time constraints
+      if (field === 'startTime' && value && prev.endTime) {
+        const [startHour, startMinute] = value.split(':').map(Number);
+        const [endHour, endMinute] = prev.endTime.split(':').map(Number);
+        
+        const startInMinutes = startHour * 60 + startMinute;
+        const endInMinutes = endHour * 60 + endMinute;
+        
+        // If start time is after or equal to end time, clear end time
+        if (startInMinutes >= endInMinutes) {
+          newData.endTime = '';
+        }
+      } else if (field === 'endTime' && value && prev.startTime) {
+        const [startHour, startMinute] = prev.startTime.split(':').map(Number);
+        const [endHour, endMinute] = value.split(':').map(Number);
+        
+        const startInMinutes = startHour * 60 + startMinute;
+        const endInMinutes = endHour * 60 + endMinute;
+        
+        // If end time is before or equal to start time, clear start time
+        if (endInMinutes <= startInMinutes) {
+          newData.startTime = '';
+        }
+      }
+      
+      return newData;
+    });
   };
 
   const toggleWorkingDay = (day) => {
@@ -146,14 +198,63 @@ const NewTimeScheduleStep = ({ initialData, onNext, onBack }) => {
     return dates;
   };
 
-  const generateTimeOptions = () => {
+  const generateTimeOptions = (type = null) => {
     const times = [];
-    for (let hour = 6; hour <= 23; hour++) {
+    let minHour = 6;
+    let maxHour = 23;
+    
+    // Apply time constraints based on what's already selected
+    if (type === 'end' && formData.startTime) {
+      const [startHour, startMinute] = formData.startTime.split(':').map(Number);
+      minHour = startHour;
+      // If selecting end time, it must be at least 30 minutes after start time
+      if (startMinute === 30) {
+        minHour = startHour + 1;
+      }
+    } else if (type === 'start' && formData.endTime) {
+      const [endHour, endMinute] = formData.endTime.split(':').map(Number);
+      maxHour = endHour;
+      // If selecting start time, it must be at least 30 minutes before end time
+      if (endMinute === 0) {
+        maxHour = endHour - 1;
+      }
+    }
+    
+    for (let hour = minHour; hour <= maxHour; hour++) {
       for (let minute = 0; minute < 60; minute += 30) {
         const value = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+        
+        // Additional filtering for edge cases
+        if (type === 'end' && formData.startTime) {
+          const [startHour, startMinute] = formData.startTime.split(':').map(Number);
+          const currentTimeInMinutes = hour * 60 + minute;
+          const startTimeInMinutes = startHour * 60 + startMinute;
+          
+          if (currentTimeInMinutes <= startTimeInMinutes) {
+            continue; // Skip times that are before or equal to start time
+          }
+        } else if (type === 'start' && formData.endTime) {
+          const [endHour, endMinute] = formData.endTime.split(':').map(Number);
+          const currentTimeInMinutes = hour * 60 + minute;
+          const endTimeInMinutes = endHour * 60 + endMinute;
+          
+          if (currentTimeInMinutes >= endTimeInMinutes) {
+            continue; // Skip times that are after or equal to end time
+          }
+        }
+        
         times.push({ value, label: value });
       }
     }
+    
+    // If no valid times are available, show a message
+    if (times.length === 0 && type) {
+      times.push({ 
+        value: 'reset', 
+        label: type === 'start' ? '请先清除结束时间' : '请先清除开始时间' 
+      });
+    }
+    
     return times;
   };
 
@@ -166,6 +267,40 @@ const NewTimeScheduleStep = ({ initialData, onNext, onBack }) => {
     { id: 'saturday', name: t('saturday'), short: '六' },
     { id: 'sunday', name: t('sunday'), short: '日' },
   ];
+
+  const calculateDuration = () => {
+    if (!formData.startDate || !formData.endDate) {
+      return 1;
+    }
+
+    const start = new Date(formData.startDate);
+    const end = new Date(formData.endDate);
+    
+    if (formData.timeNature === 'onetime') {
+      // For one-time projects, calculate total days
+      const diffTime = Math.abs(end - start);
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 to include both start and end days
+      return diffDays;
+    } else {
+      // For recurring projects, calculate working days only
+      const workingDaysCount = formData.workingDays.length || 1;
+      let totalWorkingDays = 0;
+      let current = new Date(start);
+      
+      while (current <= end) {
+        const dayOfWeek = current.getDay();
+        const dayId = weekDays[(dayOfWeek + 6) % 7].id; // Convert Sunday=0 to our Monday=0 based system
+        
+        if (formData.workingDays.includes(dayId)) {
+          totalWorkingDays++;
+        }
+        
+        current.setDate(current.getDate() + 1);
+      }
+      
+      return totalWorkingDays || 1; // Return at least 1 day
+    }
+  };
 
   const isFormValid = () => {
     if (formData.timeNature === 'onetime') {
@@ -313,7 +448,9 @@ const NewTimeScheduleStep = ({ initialData, onNext, onBack }) => {
                 style={styles.timeInput}
                 onPress={() => setShowTimePicker('start')}
               >
-                <Text style={styles.timeText}>{formData.startTime}</Text>
+                <Text style={[styles.timeText, !formData.startTime && styles.timePlaceholder]}>
+                  {formData.startTime || '选择开始时间'}
+                </Text>
                 <Icon name="clock-o" size={16} color="#6b7280" />
               </TouchableOpacity>
             </View>
@@ -324,7 +461,9 @@ const NewTimeScheduleStep = ({ initialData, onNext, onBack }) => {
                 style={styles.timeInput}
                 onPress={() => setShowTimePicker('end')}
               >
-                <Text style={styles.timeText}>{formData.endTime}</Text>
+                <Text style={[styles.timeText, !formData.endTime && styles.timePlaceholder]}>
+                  {formData.endTime || '选择结束时间'}
+                </Text>
                 <Icon name="clock-o" size={16} color="#6b7280" />
               </TouchableOpacity>
             </View>
@@ -450,6 +589,22 @@ const NewTimeScheduleStep = ({ initialData, onNext, onBack }) => {
           </View>
         </View>
 
+        {/* Cost Preview */}
+        {formData.budgetRange && formData.paymentType && (
+          <View style={styles.sectionContainer}>
+            <CostPreviewCard
+              workers={initialData?.requiredWorkers || 1}
+              paymentType={formData.paymentType}
+              wage={parseFloat(formData.budgetRange) || 0}
+              duration={calculateDuration()}
+              workingDays={formData.workingDays}
+              startTime={formData.startTime}
+              endTime={formData.endTime}
+              showDetails={true}
+            />
+          </View>
+        )}
+
         {/* Time Notes */}
         <View style={styles.sectionContainer}>
           <Text style={styles.sectionTitle}>{t('timeNotes')}</Text>
@@ -519,6 +674,7 @@ const NewTimeScheduleStep = ({ initialData, onNext, onBack }) => {
         }}
         selectedTime={showTimePicker === 'start' ? formData.startTime : formData.endTime}
         generateTimeOptions={generateTimeOptions}
+        type={showTimePicker}
         styles={styles}
         t={t}
       />
@@ -661,6 +817,9 @@ const styles = StyleSheet.create({
   timeText: {
     fontSize: 16,
     color: '#374151',
+  },
+  timePlaceholder: {
+    color: '#9ca3af',
   },
   daysContainer: {
     flexDirection: 'row',
@@ -841,6 +1000,31 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     paddingHorizontal: 24,
+  },
+  clearTimeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    marginHorizontal: 24,
+    marginBottom: 12,
+    backgroundColor: '#FEE2E2',
+    borderRadius: 8,
+    gap: 8,
+  },
+  clearTimeText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#EF4444',
+  },
+  resetTimeOption: {
+    backgroundColor: '#F3F4F6',
+    opacity: 0.6,
+  },
+  resetTimeText: {
+    color: '#9CA3AF',
+    fontStyle: 'italic',
   },
   dateOption: {
     paddingVertical: 16,

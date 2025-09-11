@@ -1,5 +1,16 @@
 // API配置
-export const API_URL = 'http://localhost:3000/api';
+// 开发环境使用本机IP地址，生产环境使用真实域名
+// 开发者需要修改这里的IP地址为自己电脑的IP
+//const DEV_API_URL = 'http://121.234.75.251:3000/api';
+const DEV_API_URL = 'http://192.168.0.216:3000/api';
+const PROD_API_URL = 'https://api.stafflink.com/api';
+
+export const API_URL = __DEV__ ? DEV_API_URL : PROD_API_URL;
+
+// 调试信息（开发时可以看到当前使用的API地址）
+if (__DEV__) {
+  console.log('当前API地址:', API_URL);
+}
 
 // 其他配置
 export const APP_CONFIG = {

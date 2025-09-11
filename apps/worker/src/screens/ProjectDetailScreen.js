@@ -247,46 +247,33 @@ const ProjectDetailScreen = ({ route, navigation }) => {
         {/* 薪资信息 */}
         {projectData.wageOffer > 0 && (
           <View style={styles.wageCard}>
-            <Text style={styles.sectionTitle}>薪资待遇</Text>
+            <Text style={styles.sectionTitle}>薪资方案</Text>
             
-            {/* 基础薪资 */}
+            {/* 薪资展示 */}
             <View style={styles.wageInfo}>
               <Icon name="cash-outline" size={24} color="#059669" />
-              <Text style={styles.wageAmount}>
-                ¥{projectData.wageOffer}
-                <Text style={styles.wageUnit}>
-                  {projectData.wageType === 'daily' ? '/天' : '/小时'}
+              <View style={styles.wageTextContainer}>
+                <Text style={styles.wageAmount}>
+                  ¥{projectData.wageOffer}
+                  <Text style={styles.wageUnit}>
+                    {projectData.wageType === 'daily' ? '/天' : projectData.wageType === 'fixed' ? ' (固定)' : '/小时'}
+                  </Text>
                 </Text>
-              </Text>
+                <Text style={styles.wageSummary}>
+                  {(() => {
+                    if (projectData.wageType === 'hourly') {
+                      const totalAmount = projectData.wageOffer * (projectData.workHours || 8);
+                      return `预计收入: ¥${totalAmount.toFixed(0)}`;
+                    } else if (projectData.wageType === 'daily') {
+                      return `日薪收入: ¥${projectData.wageOffer}`;
+                    } else if (projectData.wageType === 'fixed') {
+                      return `项目总价: ¥${projectData.wageOffer}`;
+                    }
+                    return '';
+                  })()}
+                </Text>
+              </View>
             </View>
-            
-            {/* 计算明细 */}
-            {projectData.wageType === 'hourly' && (
-              <View style={styles.wageCalculation}>
-                <View style={styles.calculationRow}>
-                  <Text style={styles.calculationLabel}>工作时长</Text>
-                  <Text style={styles.calculationValue}>
-                    {projectData.workHours || 8} 小时
-                  </Text>
-                </View>
-                <View style={styles.calculationDivider} />
-                <View style={styles.calculationRow}>
-                  <Text style={styles.calculationLabel}>预计收入</Text>
-                  <Text style={styles.calculationTotal}>
-                    ¥{(projectData.wageOffer * (projectData.workHours || 8)).toFixed(2)}
-                  </Text>
-                </View>
-              </View>
-            )}
-            
-            {/* 计算公式展示 */}
-            {projectData.wageType === 'hourly' && (
-              <View style={styles.wageFormula}>
-                <Text style={styles.formulaText}>
-                  ¥{projectData.wageOffer}/小时 × {projectData.workHours || 8}小时 = ¥{(projectData.wageOffer * (projectData.workHours || 8)).toFixed(2)}
-                </Text>
-              </View>
-            )}
           </View>
         )}
 
@@ -604,51 +591,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '400',
   },
-  wageCalculation: {
-    marginTop: 16,
-    backgroundColor: '#F0FDF4',
-    borderRadius: 8,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
+  wageTextContainer: {
+    marginLeft: 12,
+    flex: 1,
   },
-  calculationRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  calculationLabel: {
+  wageSummary: {
     fontSize: 14,
-    color: '#374151',
+    color: '#F59E0B',
+    fontWeight: '600',
+    marginTop: 4,
   },
-  calculationValue: {
-    fontSize: 14,
-    color: '#374151',
-    fontWeight: '500',
-  },
-  calculationDivider: {
-    height: 1,
-    backgroundColor: '#D1FAE5',
-    marginVertical: 8,
-  },
-  calculationTotal: {
-    fontSize: 18,
-    color: '#059669',
-    fontWeight: '700',
-  },
-  wageFormula: {
-    marginTop: 12,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
-  },
-  formulaText: {
-    fontSize: 14,
-    color: '#4B5563',
-    fontWeight: '500',
-  },
+  // 不再使用的样式 - 已整合到新的薪资方案展示中
+  // wageCalculation: {},
+  // calculationRow: {},
+  // calculationLabel: {},
+  // calculationValue: {},
+  // calculationDivider: {},
+  // calculationTotal: {},
+  // wageFormula: {},
+  // formulaText: {},
   requirementCard: {
     backgroundColor: '#FFF',
     marginHorizontal: 16,

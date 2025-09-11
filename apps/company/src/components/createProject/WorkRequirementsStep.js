@@ -7,6 +7,8 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -128,8 +130,16 @@ const WorkRequirementsStep = ({ initialData, onNext, onBack }) => {
   };
 
   return (
-    <View style={styles.container}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+    <KeyboardAvoidingView 
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+    >
+      <ScrollView 
+        style={styles.scrollView} 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollViewContent}
+      >
         {/* Header */}
         <View style={styles.headerContainer}>
           <TouchableOpacity style={styles.backButton} onPress={onBack}>
@@ -379,7 +389,7 @@ const WorkRequirementsStep = ({ initialData, onNext, onBack }) => {
           <Icon name="arrow-right" size={16} color={isFormValid() ? "#ffffff" : "#9ca3af"} />
         </TouchableOpacity>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -391,6 +401,9 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
     paddingHorizontal: 24,
+  },
+  scrollViewContent: {
+    paddingBottom: 100,
   },
   headerContainer: {
     flexDirection: 'row',

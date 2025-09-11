@@ -53,4 +53,13 @@ router.post('/refresh', protect, authController.refreshToken);
 // @access  Private
 router.get('/me', protect, authController.getMe);
 
+// @desc    Quick login with mobile number (一键登录)
+// @route   POST /api/auth/quick-login
+// @access  Public
+// TODO: Implement quickLogin functionality
+// router.post('/quick-login', [
+//   body('loginToken').notEmpty().withMessage('Login token is required'),
+//   body('userType').isIn(['company', 'worker']).withMessage('User type must be company or worker')
+// ], authController.quickLogin);
+
 module.exports = router;

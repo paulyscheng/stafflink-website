@@ -15,8 +15,9 @@ const protect = async (req, res, next) => {
     // 开发环境下跳过JWT验证
     if (process.env.NODE_ENV === 'development') {
       if (token === 'test-token-for-development') {
+        // 使用一个可能存在的公司ID，或创建一个新的
         req.user = {
-          id: '62dbe51e-2aae-499c-9783-2890a4a23dea',
+          id: '57c9b581-1421-4d4a-883e-40010e72e738', // 这是之前测试数据中的公司ID
           type: 'company'
         };
         return next();

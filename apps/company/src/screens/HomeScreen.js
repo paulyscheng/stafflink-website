@@ -20,7 +20,32 @@ const HomeScreen = ({ navigation, route }) => {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState('all'); // 'all', 'in_progress', 'draft', 'completed'
+  const [userName, setUserName] = useState('');
   const unreadCount = getUnreadCount();
+
+  // 获取时间对应的问候语
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) {
+      return '早上好';
+    } else if (hour < 18) {
+      return '下午好';
+    } else {
+      return '晚上好';
+    }
+  };
+
+  // Load user info
+  const loadUserInfo = async () => {
+    try {
+      const response = await ApiService.getProfile();
+      if (response && response.user && response.user.contact_person) {
+        setUserName(response.user.contact_person);
+      }
+    } catch (error) {
+      console.error('Failed to load user info:', error);
+    }
+  };
 
   // Load projects from API
   const loadProjects = async () => {
@@ -88,11 +113,15 @@ const HomeScreen = ({ navigation, route }) => {
   // Initial load
   useEffect(() => {
     loadProjects();
+    loadUserInfo();
   }, []);
 
   // Refresh when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
+      // 每次获得焦点时都刷新用户信息（可能在其他页面更新了）
+      loadUserInfo();
+      
       if (route?.params?.refresh) {
         console.log('🔄 HomeScreen focused with refresh flag, reloading projects...');
         loadProjects();
@@ -136,8 +165,8 @@ const HomeScreen = ({ navigation, route }) => {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.welcomeText}>{t('goodMorning')}</Text>
-            <Text style={styles.companyName}>{t('yourCompany')}</Text>
+            <Text style={styles.welcomeText}>{getGreeting()}</Text>
+            <Text style={styles.companyName}>{userName || '加载中...'}</Text>
           </View>
           <TouchableOpacity 
             style={styles.notificationButton}

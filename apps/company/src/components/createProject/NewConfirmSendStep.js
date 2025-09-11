@@ -56,40 +56,45 @@ const NewConfirmSendStep = ({ initialData, onNext, onBack, projectData }) => {
   // Helper functions to get display data
   const getProjectTypeDisplay = () => {
     const typeMapping = {
-      // Construction & Renovation
-      'home_renovation': '建筑装修 > 家庭装修',
-      'commercial_renovation': '建筑装修 > 商业装修',
-      'electrical_plumbing': '建筑装修 > 水电工程',
-      'maintenance_service': '建筑装修 > 维修服务',
-      'construction_project': '建筑装修 > 建筑工程',
+      // 建筑装修业
+      'home_renovation': '建筑装修 > 家装',
+      'office_decoration': '建筑装修 > 工装',
+      'outdoor_construction': '建筑装修 > 户外施工',
+      'installation_maintenance': '建筑装修 > 安装维修',
+      'waterproof_insulation': '建筑装修 > 防水保温',
+      'demolition': '建筑装修 > 拆除清理',
       
-      // Food & Beverage
-      'coffee_tea': '餐饮服务 > 咖啡茶饮',
-      'chinese_cuisine': '餐饮服务 > 中式餐饮',
-      'fast_food': '餐饮服务 > 快餐服务',
-      'hotpot_bbq': '餐饮服务 > 火锅烧烤',
-      'hotel_dining': '餐饮服务 > 酒店餐饮',
+      // 餐饮服务业
+      'chef': '餐饮服务 > 厨师',
+      'service_staff': '餐饮服务 > 服务员',
+      'kitchen_helper': '餐饮服务 > 后厨帮工',
+      'delivery': '餐饮服务 > 配送员',
+      'dishwasher': '餐饮服务 > 洗碗工',
+      'food_prep': '餐饮服务 > 备菜员',
       
-      // Manufacturing
-      'electronics_mfg': '制造业 > 电子制造',
-      'textile_mfg': '制造业 > 纺织制造',
-      'food_processing': '制造业 > 食品加工',
-      'mechanical_mfg': '制造业 > 机械制造',
-      'packaging_printing': '制造业 > 包装印刷',
+      // 制造业
+      'assembly_line': '制造业 > 流水线工人',
+      'quality_inspection': '制造业 > 质检员',
+      'packaging': '制造业 > 包装工',
+      'machine_operator': '制造业 > 机器操作员',
+      'warehouse_keeper': '制造业 > 仓库管理员',
+      'forklift_driver': '制造业 > 叉车司机',
       
-      // Logistics & Warehousing
-      'express_delivery': '物流仓储 > 快递配送',
-      'warehouse_ops': '物流仓储 > 仓库运营',
-      'moving_service': '物流仓储 > 搬家服务',
-      'freight_handling': '物流仓储 > 货运装卸',
-      'inventory_mgmt': '物流仓储 > 库存管理',
+      // 物流仓储
+      'loader': '物流仓储 > 装卸工',
+      'sorter': '物流仓储 > 分拣员',
+      'packer': '物流仓储 > 打包员',
+      'courier': '物流仓储 > 快递员',
+      'driver': '物流仓储 > 司机',
+      'inventory_clerk': '物流仓储 > 库存管理员',
       
-      // General Services
-      'cleaning_service': '综合服务 > 清洁服务',
-      'security_service': '综合服务 > 安保服务',
-      'landscaping': '综合服务 > 园林绿化',
-      'event_service': '综合服务 > 活动服务',
-      'emergency_service': '综合服务 > 应急维修',
+      // 其他服务
+      'cleaner': '综合服务 > 保洁员',
+      'security': '综合服务 > 保安',
+      'gardener': '综合服务 > 园艺工',
+      'mover': '综合服务 > 搬运工',
+      'general_labor': '综合服务 > 普工',
+      'other': '综合服务 > 其他',
     };
     return typeMapping[projectData?.projectType] || projectData?.projectType;
   };

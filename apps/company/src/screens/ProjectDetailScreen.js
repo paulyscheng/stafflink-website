@@ -271,47 +271,31 @@ const ProjectDetailScreen = ({ route, navigation }) => {
           
           <View style={styles.infoCard}>
             <Icon name="money" size={20} color="#f59e0b" />
-            <Text style={styles.infoLabel}>薪资待遇</Text>
+            <Text style={styles.infoLabel}>薪资方案</Text>
             <Text style={styles.infoValue}>{formatPayment()}</Text>
-            <Text style={styles.infoSubValue}>
-              {(project.payment_type || project.paymentType) === 'hourly' ? '按小时' : 
-               (project.payment_type || project.paymentType) === 'daily' ? '按天' : 
-               (project.payment_type || project.paymentType) === 'total' ? '项目总价' : '固定价格'}
+            <Text style={[styles.infoSubValue, styles.totalCostText]}>
+              {(() => {
+                const paymentType = project.payment_type || project.paymentType;
+                const totalRequired = project.required_workers || project.requiredWorkers || 5;
+                const wage = project.original_wage || project.originalWage || 
+                            project.daily_wage || project.dailyWage || 
+                            project.budget_range || project.budgetRange || 0;
+                
+                if (paymentType === 'hourly') {
+                  const totalAmount = wage * 8 * totalRequired;
+                  return `预计总支出 ¥${totalAmount.toFixed(0)}`;
+                } else if (paymentType === 'daily') {
+                  const totalAmount = wage * totalRequired;
+                  return `预计总支出 ¥${totalAmount.toFixed(0)}`;
+                } else if (paymentType === 'fixed' || paymentType === 'total') {
+                  return `项目总价 ¥${wage}`;
+                }
+                return '面议';
+              })()}
             </Text>
           </View>
         </View>
         
-        {/* 费用明细卡片 */}
-        {(project.payment_type || project.paymentType) === 'hourly' && (
-          <View style={styles.feeDetailCard}>
-            <View style={styles.feeDetailHeader}>
-              <Icon name="calculator" size={16} color="#f59e0b" />
-              <Text style={styles.feeDetailTitle}>费用计算</Text>
-            </View>
-            <View style={styles.feeCalculation}>
-              <View style={styles.feeRow}>
-                <Text style={styles.feeLabel}>时薪</Text>
-                <Text style={styles.feeValue}>
-                  ¥{project.original_wage || project.originalWage || 0}/小时
-                </Text>
-              </View>
-              <View style={styles.feeRow}>
-                <Text style={styles.feeLabel}>工作时长</Text>
-                <Text style={styles.feeValue}>8 小时/天</Text>
-              </View>
-              <View style={styles.feeDivider} />
-              <View style={styles.feeRow}>
-                <Text style={styles.feeTotalLabel}>日薪总计</Text>
-                <Text style={styles.feeTotalValue}>
-                  ¥{((project.original_wage || project.originalWage || 0) * 8).toFixed(2)}
-                </Text>
-              </View>
-              <Text style={styles.feeFormula}>
-                ¥{project.original_wage || project.originalWage || 0}/小时 × 8小时 = ¥{((project.original_wage || project.originalWage || 0) * 8).toFixed(2)}/天
-              </Text>
-            </View>
-          </View>
-        )}
         
         {/* 进度条 */}
         <View style={styles.progressSection}>
@@ -821,6 +805,10 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     marginTop: 2,
   },
+  totalCostText: {
+    color: '#f59e0b',
+    fontWeight: '600',
+  },
   progressSection: {
     backgroundColor: '#ffffff',
     borderRadius: 12,
@@ -889,69 +877,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#ffffff',
     marginLeft: 6,
-  },
-  
-  // 费用明细样式
-  feeDetailCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#fef3c7',
-  },
-  feeDetailHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  feeDetailTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1f2937',
-    marginLeft: 8,
-  },
-  feeCalculation: {
-    backgroundColor: '#fffbeb',
-    borderRadius: 8,
-    padding: 12,
-  },
-  feeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  feeLabel: {
-    fontSize: 14,
-    color: '#374151',
-  },
-  feeValue: {
-    fontSize: 14,
-    color: '#374151',
-    fontWeight: '500',
-  },
-  feeDivider: {
-    height: 1,
-    backgroundColor: '#fef3c7',
-    marginVertical: 8,
-  },
-  feeTotalLabel: {
-    fontSize: 14,
-    color: '#374151',
-    fontWeight: '600',
-  },
-  feeTotalValue: {
-    fontSize: 18,
-    color: '#f59e0b',
-    fontWeight: '700',
-  },
-  feeFormula: {
-    fontSize: 12,
-    color: '#92400e',
-    textAlign: 'center',
-    marginTop: 8,
-    fontWeight: '500',
   },
   
   // 工人Tab样式

@@ -7,6 +7,9 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -40,7 +43,7 @@ const LoginForm = ({ onToggleForm }) => {
 
     setLoading(true);
     try {
-      const response = await ApiService.sendCode(phoneNumber);
+      const response = await ApiService.sendCode(phoneNumber, 'company');
       if (response && response.success) {
         setCodeSent(true);
         setCountdown(60);
@@ -167,12 +170,14 @@ const LoginForm = ({ onToggleForm }) => {
 
       {/* Sign Up Link */}
       <View style={styles.signupContainer}>
-        <Text style={styles.signupText}>
-          {t('alreadyHaveAccount')} {' '}
+        <View style={styles.signupRow}>
+          <Text style={styles.signupText}>
+            {t('noAccount') || '没有账户？'}
+          </Text>
           <TouchableOpacity onPress={onToggleForm}>
-            <Text style={styles.signupLink}>{t('loginHere')}</Text>
+            <Text style={styles.signupLink}>{t('registerNow') || '立即注册'}</Text>
           </TouchableOpacity>
-        </Text>
+        </View>
       </View>
 
       {/* Phone Login Modal */}
@@ -182,7 +187,10 @@ const LoginForm = ({ onToggleForm }) => {
         transparent={true}
         onRequestClose={() => setShowPhoneLogin(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>手机号登录</Text>
@@ -194,7 +202,7 @@ const LoginForm = ({ onToggleForm }) => {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.modalBody}>
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
               {/* 手机号输入 */}
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>手机号码</Text>
@@ -259,9 +267,9 @@ const LoginForm = ({ onToggleForm }) => {
                   <Text style={styles.modalLoginButtonText}>登录</Text>
                 )}
               </TouchableOpacity>
-            </View>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -349,14 +357,20 @@ const styles = StyleSheet.create({
     borderTopColor: '#f3f4f6',
     alignItems: 'center',
   },
+  signupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   signupText: {
     fontSize: 14,
     color: '#6b7280',
+    marginRight: 5,
   },
   signupLink: {
     color: '#2563eb',
     fontWeight: '600',
     textDecorationLine: 'underline',
+    fontSize: 14,
   },
   // Modal styles
   modalOverlay: {

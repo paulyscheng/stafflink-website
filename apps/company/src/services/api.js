@@ -43,16 +43,21 @@ class ApiService {
 
       return await response.json();
     } catch (error) {
-      console.error('API request failed:', error);
+      // 对于用户不存在的错误，这是注册流程的正常部分，不需要显示为错误
+      if (error.message && error.message.includes('User not found')) {
+        console.log('User not found - proceeding to registration');
+      } else {
+        console.error('API request failed:', error);
+      }
       throw error;
     }
   }
 
   // Auth endpoints
-  async sendCode(phone) {
+  async sendCode(phone, userType = 'company', purpose = 'login') {
     return this.request('/auth/send-code', {
       method: 'POST',
-      body: JSON.stringify({ phone })
+      body: JSON.stringify({ phone, userType, purpose })
     });
   }
 
@@ -75,10 +80,74 @@ class ApiService {
     return response;
   }
 
+  async verifyCode(phone, code) {
+    return this.request('/auth/verify-code', {
+      method: 'POST',
+      body: JSON.stringify({ phone, code, userType: 'company' })
+    });
+  }
+
+  async register(data) {
+    const response = await this.request('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+
+    if (response.token) {
+      await AsyncStorage.setItem('authToken', response.token);
+      await AsyncStorage.setItem('companyId', response.user.id);
+      await AsyncStorage.setItem('companyInfo', JSON.stringify(response.user));
+    }
+
+    return response;
+  }
+
   async logout() {
     await AsyncStorage.removeItem('authToken');
     await AsyncStorage.removeItem('companyId');
     await AsyncStorage.removeItem('companyInfo');
+  }
+
+  // User profile
+  async getProfile() {
+    const token = await AsyncStorage.getItem('authToken');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+    
+    return this.request('/auth/me', {
+      method: 'GET'
+    });
+  }
+
+  async updateProfile(data) {
+    console.log('🟢 [ApiService] updateProfile 被调用');
+    console.log('🟢 [ApiService] 更新数据:', data);
+    
+    const token = await AsyncStorage.getItem('authToken');
+    console.log('🟢 [ApiService] Token 存在:', !!token);
+    
+    if (!token) {
+      console.log('❌ [ApiService] 没有找到认证 Token');
+      throw new Error('No authentication token found');
+    }
+    
+    console.log('🟢 [ApiService] 发送 PUT 请求到 /companies/profile');
+    
+    const response = await this.request('/companies/profile', {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    });
+    
+    console.log('🟢 [ApiService] 收到响应:', response);
+    
+    // 更新本地存储的公司信息
+    if (response && response.success) {
+      console.log('🟢 [ApiService] 更新本地存储的公司信息');
+      await AsyncStorage.setItem('companyInfo', JSON.stringify(response.data));
+    }
+    
+    return response;
   }
 
   // Worker endpoints

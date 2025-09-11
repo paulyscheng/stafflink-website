@@ -10,6 +10,7 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useModal } from '../../../../../shared/components/Modal/ModalService';
 import ProgressBar from '../ProgressBar';
@@ -20,6 +21,8 @@ const Step5Complete = ({ onNext, onBack, initialData }) => {
     confirmPassword: '',
   });
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
   const { t } = useLanguage();
   const modal = useModal();
@@ -99,15 +102,27 @@ const Step5Complete = ({ onNext, onBack, initialData }) => {
           </View>
 
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>{t('confirmPassword')}*</Text>
-            <TextInput
-              style={styles.input}
-              placeholder={t('enterPasswordAgain')}
-              value={formData.confirmPassword}
-              onChangeText={(value) => handleInputChange('confirmPassword', value)}
-              secureTextEntry={true}
-              maxLength={20}
-            />
+            <Text style={styles.label}>确认密码 *</Text>
+            <View style={styles.passwordInputWrapper}>
+              <Icon name="lock" size={20} color="#6b7280" style={styles.inputIcon} />
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="请再次输入密码"
+                value={formData.confirmPassword}
+                onChangeText={(value) => handleInputChange('confirmPassword', value)}
+                secureTextEntry={!showConfirmPassword}
+              />
+              <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
+                <Icon 
+                  name={showConfirmPassword ? "visibility" : "visibility-off"} 
+                  size={20} 
+                  color="#6b7280" 
+                />
+              </TouchableOpacity>
+            </View>
+            {formData.confirmPassword && formData.password !== formData.confirmPassword && (
+              <Text style={styles.errorText}>密码不匹配</Text>
+            )}
           </View>
         </View>
 
@@ -136,7 +151,7 @@ const Step5Complete = ({ onNext, onBack, initialData }) => {
                 styles.completeButtonText,
                 loading && styles.completeButtonTextDisabled
               ]}>
-                {t('completeRegistration')}
+                完成注册
               </Text>
             )}
           </TouchableOpacity>
@@ -200,6 +215,29 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: '#ffffff',
     color: '#374151',
+  },
+  passwordInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#ffffff',
+  },
+  inputIcon: {
+    marginRight: 12,
+  },
+  passwordInput: {
+    flex: 1,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: '#374151',
+  },
+  errorText: {
+    fontSize: 12,
+    color: '#ef4444',
+    marginTop: 4,
   },
   buttonContainer: {
     flexDirection: 'row',

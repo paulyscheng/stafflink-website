@@ -7,10 +7,14 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useModal } from '../../../../../shared/components/Modal/ModalService';
+import SkillTagSelector from './SkillTagSelector';
+import WorkerCountSelector from './WorkerCountSelector';
 
 const NewWorkRequirementsStep = ({ initialData, onNext, onBack }) => {
   const [formData, setFormData] = useState({
@@ -24,124 +28,130 @@ const NewWorkRequirementsStep = ({ initialData, onNext, onBack }) => {
   const { t } = useLanguage();
   const modal = useModal();
 
-  // Project type to skills mapping
+  // Project type to skills mapping - 与 industryProjectMapping.js 保持一致
   const projectSkillsMapping = {
-    // Construction & Renovation
+    // 建筑装修业
     'home_renovation': ['plumbingInstall', 'carpentry', 'painting', 'tiling', 'masonry', 'waterproofing'],
-    'commercial_renovation': ['electrician', 'carpentry', 'painting', 'tiling', 'ceilingInstall', 'glassInstall'],
-    'electrical_plumbing': ['electrician', 'plumber', 'pipeInstall', 'weakCurrent'],
-    'maintenance_service': ['electrician', 'plumber', 'carpentry', 'locksmith', 'applianceRepair'],
-    'construction_project': ['rebarWorker', 'concreteWorker', 'welding', 'scaffoldWorker', 'surveyor'],
+    'office_decoration': ['electrician', 'carpentry', 'painting', 'tiling', 'ceilingInstall', 'glassInstall'],
+    'outdoor_construction': ['rebarWorker', 'concreteWorker', 'welding', 'scaffoldWorker', 'surveyor', 'masonry'],
+    'installation_maintenance': ['electrician', 'plumber', 'carpentry', 'locksmith', 'applianceRepair'],
+    'waterproof_insulation': ['waterproofing', 'masonry', 'plumber', 'tiling'],
+    'demolition': ['demolitionWorker', 'loader', 'cleaner', 'materialHandler'],
     
-    // Food & Beverage
-    'coffee_tea': ['barista', 'waiter', 'cashier', 'cleaner'],
-    'chinese_cuisine': ['chef', 'kitchenHelper', 'waiter', 'dishwasher', 'cleaner'],
-    'fast_food': ['operator', 'cashier', 'cleaner', 'deliveryWorker'],
-    'hotpot_bbq': ['bbqChef', 'waiter', 'cleaner', 'cashier'],
-    'hotel_dining': ['chef', 'waiter', 'foodRunner', 'cleaner', 'cashier'],
+    // 餐饮服务业
+    'chef': ['chef', 'kitchenHelper', 'foodProcessor'],
+    'service_staff': ['waiter', 'foodRunner', 'cashier'],
+    'kitchen_helper': ['kitchenHelper', 'dishwasher', 'cleaner'],
+    'delivery': ['deliveryWorker', 'driver', 'packer'],
+    'dishwasher': ['dishwasher', 'cleaner'],
+    'food_prep': ['foodProcessor', 'kitchenHelper', 'cuttingWorker'],
     
-    // Manufacturing
-    'electronics_mfg': ['assemblyWorker', 'solderer', 'qualityInspector', 'packagingWorker', 'machineOperator'],
-    'textile_mfg': ['sewingWorker', 'cuttingWorker', 'ironingWorker', 'qualityInspector', 'packagingWorker'],
-    'food_processing': ['foodProcessor', 'packagingWorker', 'qualityInspector', 'cleaner', 'machineOperator'],
-    'mechanical_mfg': ['welding', 'latheMachinist', 'assembler', 'qualityInspector', 'materialHandler'],
-    'packaging_printing': ['printer', 'bookbinder', 'qualityInspector', 'packagingWorker', 'machineOperator'],
+    // 制造业
+    'assembly_line': ['assemblyWorker', 'assembler', 'qualityInspector', 'packagingWorker'],
+    'quality_inspection': ['qualityInspector', 'materialHandler', 'packagingWorker'],
+    'packaging': ['packagingWorker', 'packer', 'qualityInspector'],
+    'machine_operator': ['machineOperator', 'assemblyWorker', 'qualityInspector'],
+    'warehouse_keeper': ['warehouseKeeper', 'stocker', 'forkliftOperator'],
+    'forklift_driver': ['forkliftOperator', 'loader', 'warehouseKeeper'],
     
-    // Logistics & Warehousing
-    'express_delivery': ['courier', 'sorter', 'loader', 'driver'],
-    'warehouse_ops': ['stocker', 'loader', 'forkliftOperator', 'qualityInspector', 'warehouseKeeper'],
-    'moving_service': ['mover', 'packer', 'driver', 'furnitureAssembler'],
-    'freight_handling': ['loader', 'forkliftOperator', 'driver', 'stocker'],
-    'inventory_mgmt': ['warehouseKeeper', 'stocker', 'forkliftOperator', 'qualityInspector'],
+    // 物流仓储
+    'loader': ['loader', 'mover', 'materialHandler'],
+    'sorter': ['sorter', 'packer', 'qualityInspector'],
+    'packer': ['packer', 'packagingWorker', 'sorter'],
+    'courier': ['courier', 'deliveryWorker', 'driver'],
+    'driver': ['driver', 'courier', 'deliveryWorker'],
+    'inventory_clerk': ['warehouseKeeper', 'stocker', 'qualityInspector'],
     
-    // General Services
-    'cleaning_service': ['janitor', 'cleaner', 'windowCleaner', 'carpetCleaner'],
-    'security_service': ['securityGuard', 'doorman', 'patrolOfficer', 'monitorOperator'],
-    'landscaping': ['gardener', 'treeTrimmer', 'irrigationWorker', 'planter'],
-    'event_service': ['eventSetup', 'materialHandler', 'waiter', 'audioTech', 'photographer'],
-    'emergency_service': ['electrician', 'plumber', 'locksmith', 'glazier', 'tempWorker'],
+    // 其他服务
+    'cleaner': ['cleaner', 'janitor', 'windowCleaner', 'carpetCleaner'],
+    'security': ['securityGuard', 'doorman', 'patrolOfficer', 'monitorOperator'],
+    'gardener': ['gardener', 'treeTrimmer', 'irrigationWorker', 'planter'],
+    'mover': ['mover', 'loader', 'packer', 'furnitureAssembler'],
+    'general_labor': ['tempWorker', 'materialHandler', 'loader', 'cleaner'],
+    'other': ['tempWorker', 'materialHandler', 'cleaner'],
   };
 
   const allSkills = [
     // Construction & Renovation
-    { id: 'plumbingInstall', name: t('plumbingInstall'), icon: '🔧' },
-    { id: 'electrician', name: t('electrician'), icon: '⚡' },
-    { id: 'carpentry', name: t('carpentry'), icon: '🪚' },
-    { id: 'painting', name: t('painting'), icon: '🎨' },
-    { id: 'tiling', name: t('tiling'), icon: '🧱' },
-    { id: 'masonry', name: t('masonry'), icon: '🏗️' },
-    { id: 'waterproofing', name: t('waterproofing'), icon: '💧' },
-    { id: 'ceilingInstall', name: t('ceilingInstall'), icon: '🏠' },
-    { id: 'glassInstall', name: t('glassInstall'), icon: '🪟' },
-    { id: 'plumber', name: t('plumber'), icon: '🚰' },
-    { id: 'pipeInstall', name: t('pipeInstall'), icon: '🔧' },
-    { id: 'weakCurrent', name: t('weakCurrent'), icon: '📡' },
-    { id: 'locksmith', name: t('locksmith'), icon: '🔐' },
-    { id: 'applianceRepair', name: t('applianceRepair'), icon: '🔧' },
-    { id: 'rebarWorker', name: t('rebarWorker'), icon: '⚙️' },
-    { id: 'concreteWorker', name: t('concreteWorker'), icon: '🏗️' },
-    { id: 'welding', name: t('welding'), icon: '🔥' },
-    { id: 'scaffoldWorker', name: t('scaffoldWorker'), icon: '🏗️' },
-    { id: 'surveyor', name: t('surveyor'), icon: '📐' },
+    { id: 'plumbingInstall', name: t('plumbingInstall') },
+    { id: 'electrician', name: t('electrician') },
+    { id: 'carpentry', name: t('carpentry') },
+    { id: 'painting', name: t('painting') },
+    { id: 'tiling', name: t('tiling') },
+    { id: 'masonry', name: t('masonry') },
+    { id: 'waterproofing', name: t('waterproofing') },
+    { id: 'ceilingInstall', name: t('ceilingInstall') },
+    { id: 'glassInstall', name: t('glassInstall') },
+    { id: 'plumber', name: t('plumber') },
+    { id: 'pipeInstall', name: t('pipeInstall') },
+    { id: 'weakCurrent', name: t('weakCurrent') },
+    { id: 'locksmith', name: t('locksmith') },
+    { id: 'applianceRepair', name: t('applianceRepair') },
+    { id: 'rebarWorker', name: t('rebarWorker') },
+    { id: 'concreteWorker', name: t('concreteWorker') },
+    { id: 'welding', name: t('welding') },
+    { id: 'scaffoldWorker', name: t('scaffoldWorker') },
+    { id: 'surveyor', name: t('surveyor') },
+    { id: 'demolitionWorker', name: '拆除工' },
     
     // Food & Beverage
-    { id: 'barista', name: t('barista'), icon: '☕' },
-    { id: 'waiter', name: t('waiter'), icon: '🍽️' },
-    { id: 'cashier', name: t('cashier'), icon: '💰' },
-    { id: 'cleaner', name: t('cleaner'), icon: '🧹' },
-    { id: 'chef', name: t('chef'), icon: '👨‍🍳' },
-    { id: 'kitchenHelper', name: t('kitchenHelper'), icon: '🥘' },
-    { id: 'dishwasher', name: t('dishwasher'), icon: '🍽️' },
-    { id: 'operator', name: t('operator'), icon: '⚙️' },
-    { id: 'deliveryWorker', name: t('deliveryWorker'), icon: '🚚' },
-    { id: 'bbqChef', name: t('bbqChef'), icon: '🔥' },
-    { id: 'foodRunner', name: t('foodRunner'), icon: '🏃' },
+    { id: 'barista', name: t('barista') },
+    { id: 'waiter', name: t('waiter') },
+    { id: 'cashier', name: t('cashier') },
+    { id: 'cleaner', name: t('cleaner') },
+    { id: 'chef', name: t('chef') },
+    { id: 'kitchenHelper', name: t('kitchenHelper') },
+    { id: 'dishwasher', name: t('dishwasher') },
+    { id: 'operator', name: t('operator') },
+    { id: 'deliveryWorker', name: t('deliveryWorker') },
+    { id: 'bbqChef', name: t('bbqChef') },
+    { id: 'foodRunner', name: t('foodRunner') },
     
     // Manufacturing
-    { id: 'assemblyWorker', name: t('assemblyWorker'), icon: '🔧' },
-    { id: 'solderer', name: t('solderer'), icon: '🔥' },
-    { id: 'qualityInspector', name: t('qualityInspector'), icon: '🔍' },
-    { id: 'packagingWorker', name: t('packagingWorker'), icon: '📦' },
-    { id: 'machineOperator', name: t('machineOperator'), icon: '⚙️' },
-    { id: 'sewingWorker', name: t('sewingWorker'), icon: '🧵' },
-    { id: 'cuttingWorker', name: t('cuttingWorker'), icon: '✂️' },
-    { id: 'ironingWorker', name: t('ironingWorker'), icon: '👔' },
-    { id: 'foodProcessor', name: t('foodProcessor'), icon: '🥫' },
-    { id: 'latheMachinist', name: t('latheMachinist'), icon: '⚙️' },
-    { id: 'assembler', name: t('assembler'), icon: '🔧' },
-    { id: 'materialHandler', name: t('materialHandler'), icon: '📦' },
-    { id: 'printer', name: t('printer'), icon: '🖨️' },
-    { id: 'bookbinder', name: t('bookbinder'), icon: '📚' },
+    { id: 'assemblyWorker', name: t('assemblyWorker') },
+    { id: 'solderer', name: t('solderer') },
+    { id: 'qualityInspector', name: t('qualityInspector') },
+    { id: 'packagingWorker', name: t('packagingWorker') },
+    { id: 'machineOperator', name: t('machineOperator') },
+    { id: 'sewingWorker', name: t('sewingWorker') },
+    { id: 'cuttingWorker', name: t('cuttingWorker') },
+    { id: 'ironingWorker', name: t('ironingWorker') },
+    { id: 'foodProcessor', name: t('foodProcessor') },
+    { id: 'latheMachinist', name: t('latheMachinist') },
+    { id: 'assembler', name: t('assembler') },
+    { id: 'materialHandler', name: t('materialHandler') },
+    { id: 'printer', name: t('printer') },
+    { id: 'bookbinder', name: t('bookbinder') },
     
     // Logistics & Warehousing
-    { id: 'courier', name: t('courier'), icon: '🚚' },
-    { id: 'sorter', name: t('sorter'), icon: '📋' },
-    { id: 'loader', name: t('loader'), icon: '📦' },
-    { id: 'driver', name: t('driver'), icon: '🚛' },
-    { id: 'stocker', name: t('stocker'), icon: '📊' },
-    { id: 'forkliftOperator', name: t('forkliftOperator'), icon: '🚜' },
-    { id: 'warehouseKeeper', name: t('warehouseKeeper'), icon: '🏢' },
-    { id: 'mover', name: t('mover'), icon: '📦' },
-    { id: 'packer', name: t('packer'), icon: '📦' },
-    { id: 'furnitureAssembler', name: t('furnitureAssembler'), icon: '🪑' },
+    { id: 'courier', name: t('courier') },
+    { id: 'sorter', name: t('sorter') },
+    { id: 'loader', name: t('loader') },
+    { id: 'driver', name: t('driver') },
+    { id: 'stocker', name: t('stocker') },
+    { id: 'forkliftOperator', name: t('forkliftOperator') },
+    { id: 'warehouseKeeper', name: t('warehouseKeeper') },
+    { id: 'mover', name: t('mover') },
+    { id: 'packer', name: t('packer') },
+    { id: 'furnitureAssembler', name: t('furnitureAssembler') },
     
     // General Services
-    { id: 'janitor', name: t('janitor'), icon: '🧹' },
-    { id: 'windowCleaner', name: t('windowCleaner'), icon: '🪟' },
-    { id: 'carpetCleaner', name: t('carpetCleaner'), icon: '🧹' },
-    { id: 'securityGuard', name: t('securityGuard'), icon: '🛡️' },
-    { id: 'doorman', name: t('doorman'), icon: '🚪' },
-    { id: 'patrolOfficer', name: t('patrolOfficer'), icon: '👮' },
-    { id: 'monitorOperator', name: t('monitorOperator'), icon: '📺' },
-    { id: 'gardener', name: t('gardener'), icon: '🌱' },
-    { id: 'treeTrimmer', name: t('treeTrimmer'), icon: '🌳' },
-    { id: 'irrigationWorker', name: t('irrigationWorker'), icon: '💧' },
-    { id: 'planter', name: t('planter'), icon: '🌱' },
-    { id: 'eventSetup', name: t('eventSetup'), icon: '🎪' },
-    { id: 'audioTech', name: t('audioTech'), icon: '🎵' },
-    { id: 'photographer', name: t('photographer'), icon: '📷' },
-    { id: 'glazier', name: t('glazier'), icon: '🪟' },
-    { id: 'tempWorker', name: t('tempWorker'), icon: '⚡' },
+    { id: 'janitor', name: t('janitor') },
+    { id: 'windowCleaner', name: t('windowCleaner') },
+    { id: 'carpetCleaner', name: t('carpetCleaner') },
+    { id: 'securityGuard', name: t('securityGuard') },
+    { id: 'doorman', name: t('doorman') },
+    { id: 'patrolOfficer', name: t('patrolOfficer') },
+    { id: 'monitorOperator', name: t('monitorOperator') },
+    { id: 'gardener', name: t('gardener') },
+    { id: 'treeTrimmer', name: t('treeTrimmer') },
+    { id: 'irrigationWorker', name: t('irrigationWorker') },
+    { id: 'planter', name: t('planter') },
+    { id: 'eventSetup', name: t('eventSetup') },
+    { id: 'audioTech', name: t('audioTech') },
+    { id: 'photographer', name: t('photographer') },
+    { id: 'glazier', name: t('glazier') },
+    { id: 'tempWorker', name: t('tempWorker') },
   ];
 
   // Get relevant skills based on project type
@@ -227,19 +237,9 @@ const NewWorkRequirementsStep = ({ initialData, onNext, onBack }) => {
   };
 
   const isFormValid = () => {
-    const hasValidWorkerCount = () => {
-      if (formData.requiredWorkers === 'custom') {
-        const customCount = parseInt(formData.customWorkerCount);
-        return formData.customWorkerCount.trim().length > 0 && 
-               customCount > 0 && 
-               customCount > 10; // Must be greater than 10 for custom input
-      }
-      return formData.requiredWorkers > 0;
-    };
-
     return formData.requiredSkills.length > 0 && 
            formData.workDescription.trim().length > 0 &&
-           hasValidWorkerCount();
+           formData.requiredWorkers > 0;
   };
 
   const handleNext = () => {
@@ -248,20 +248,20 @@ const NewWorkRequirementsStep = ({ initialData, onNext, onBack }) => {
       return;
     }
     
-    // Prepare final data
-    const finalData = { ...formData };
-    
-    // If custom worker count is selected, use the actual number
-    if (formData.requiredWorkers === 'custom' && formData.customWorkerCount) {
-      finalData.requiredWorkers = parseInt(formData.customWorkerCount);
-    }
-    
-    onNext(finalData);
+    onNext(formData);
   };
 
   return (
-    <View style={styles.container}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+    <KeyboardAvoidingView 
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+    >
+      <ScrollView 
+        style={styles.scrollView} 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollViewContent}
+      >
         {/* Header */}
         <View style={styles.headerContainer}>
           <TouchableOpacity style={styles.backButton} onPress={onBack}>
@@ -276,29 +276,11 @@ const NewWorkRequirementsStep = ({ initialData, onNext, onBack }) => {
           <Text style={styles.sectionTitle}>{t('requiredSkillsLabel')}</Text>
           <Text style={styles.sectionSubtitle}>{t('selectRequiredSkills')}</Text>
           
-          <View style={styles.skillsGrid}>
-            {skills.map((skill) => (
-              <TouchableOpacity
-                key={skill.id}
-                style={[
-                  styles.skillChip,
-                  formData.requiredSkills.includes(skill.id) && styles.selectedSkillChip
-                ]}
-                onPress={() => toggleSkill(skill.id)}
-              >
-                <Text style={styles.skillIcon}>{skill.icon}</Text>
-                <Text style={[
-                  styles.skillText,
-                  formData.requiredSkills.includes(skill.id) && styles.selectedSkillText
-                ]}>
-                  {skill.name}
-                </Text>
-                {formData.requiredSkills.includes(skill.id) && (
-                  <Icon name="check" size={12} color="#22c55e" style={styles.checkIcon} />
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
+          <SkillTagSelector
+            selectedSkills={formData.requiredSkills}
+            onSkillsChange={(skills) => handleInputChange('requiredSkills', skills)}
+            availableSkills={skills}
+          />
         </View>
 
         {/* Required Workers */}
@@ -306,65 +288,13 @@ const NewWorkRequirementsStep = ({ initialData, onNext, onBack }) => {
           <Text style={styles.sectionTitle}>{t('requiredWorkersLabel')}</Text>
           <Text style={styles.sectionSubtitle}>{t('selectWorkerCount')}</Text>
           
-          {/* 1-10 People */}
-          <Text style={styles.subSectionTitle}>1-10{t('peopleCount')}</Text>
-          <View style={styles.workerCountGrid}>
-            {workerCounts.map((count) => (
-              <TouchableOpacity
-                key={count}
-                style={[
-                  styles.countButton,
-                  formData.requiredWorkers === count && styles.selectedCountButton
-                ]}
-                onPress={() => handleWorkerCountChange(count)}
-              >
-                <Text style={[
-                  styles.countText,
-                  formData.requiredWorkers === count && styles.selectedCountText
-                ]}>
-                  {count}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* 10+ People Input */}
-          <Text style={styles.subSectionTitle}>10{t('peopleCount')}以上</Text>
-          <TouchableOpacity
-            style={[
-              styles.customTriggerButton,
-              formData.requiredWorkers === 'custom' && styles.selectedCustomTriggerButton
-            ]}
-            onPress={() => handleWorkerCountChange('custom')}
-          >
-            <Text style={[
-              styles.customTriggerText,
-              formData.requiredWorkers === 'custom' && styles.selectedCustomTriggerText
-            ]}>
-              {formData.requiredWorkers === 'custom' && formData.customWorkerCount 
-                ? `${formData.customWorkerCount}${t('peopleCount')}` 
-                : `10${t('peopleCount')}以上`}
-            </Text>
-            <Icon name="edit" size={16} color={formData.requiredWorkers === 'custom' ? "#ffffff" : "#6b7280"} />
-          </TouchableOpacity>
-
-          {/* Custom Input for 10+ */}
-          {formData.requiredWorkers === 'custom' && (
-            <View style={styles.customInputContainer}>
-              <Text style={styles.customInputLabel}>{t('enterExactCount')}</Text>
-              <View style={styles.customInputWrapper}>
-                <TextInput
-                  style={styles.customInput}
-                  placeholder="请输入人数（大于10）"
-                  value={formData.customWorkerCount}
-                  onChangeText={handleCustomCountChange}
-                  keyboardType="numeric"
-                  autoFocus={true}
-                />
-                <Text style={styles.customInputUnit}>{t('peopleCount')}</Text>
-              </View>
-            </View>
-          )}
+          <WorkerCountSelector
+            value={typeof formData.requiredWorkers === 'number' ? formData.requiredWorkers : 
+                   (formData.customWorkerCount ? parseInt(formData.customWorkerCount) : 1)}
+            onChange={(count) => handleInputChange('requiredWorkers', count)}
+            min={1}
+            max={100}
+          />
         </View>
 
         {/* Experience Level */}
@@ -423,6 +353,7 @@ const NewWorkRequirementsStep = ({ initialData, onNext, onBack }) => {
           />
         </View>
 
+
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
@@ -447,7 +378,7 @@ const NewWorkRequirementsStep = ({ initialData, onNext, onBack }) => {
           )}
         </TouchableOpacity>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -459,6 +390,9 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
     paddingHorizontal: 24,
+  },
+  scrollViewContent: {
+    paddingBottom: 100,
   },
   headerContainer: {
     flexDirection: 'row',

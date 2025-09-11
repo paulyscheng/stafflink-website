@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,490 +6,303 @@ import {
   TouchableOpacity,
   StyleSheet,
   SafeAreaView,
-  Modal,
-  TextInput,
-  Switch,
+  ActivityIndicator,
+  RefreshControl,
+  Platform,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/FontAwesome';
+import { LinearGradient } from 'expo-linear-gradient';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useModal } from '../../../../shared/components/Modal/ModalService';
+import ApiService from '../services/api';
+import LoadingSpinner from '../../../../shared/components/Loading/LoadingSpinner';
 
-const ProfileScreen = ({ navigation }) => {
-  const { t, currentLanguage, setLanguage } = useLanguage();
-  const { logout } = useAuth();
-  const { isDarkMode, toggleTheme, theme } = useTheme();
+const ProfileScreen = () => {
+  const { t } = useLanguage();
+  const { logout, user } = useAuth();
+  const { theme } = useTheme();
+  const navigation = useNavigation();
   const modal = useModal();
   
-  // Modal states
-  const [showEditProfile, setShowEditProfile] = useState(false);
-  const [showNotificationSettings, setShowNotificationSettings] = useState(false);
-  const [showCompanySettings, setShowCompanySettings] = useState(false);
-  
-  // User preferences  
-  const [notificationSettings, setNotificationSettings] = useState({
-    projectUpdates: true,
-    workerMessages: true,
-    systemNotifications: false,
-    emailNotifications: true
-  });
-  
-  // User profile data
-  const [userProfile, setUserProfile] = useState({
-    name: '张总',
-    email: 'zhang@company.com',
-    phone: '138****1234',
-    position: '项目经理',
-    company: '建筑装饰有限公司',
-    department: '工程部'
-  });
-  
-  const [companyInfo, setCompanyInfo] = useState({
-    name: '建筑装饰有限公司',
-    address: '北京市朝阳区建国门外大街23号',
-    contact: '010-12345678',
-    email: 'info@company.com',
-    description: '专业从事建筑装饰工程的企业'
+  const [userProfile, setUserProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [stats, setStats] = useState({
+    activeProjects: 0,
+    completedProjects: 0,
+    totalWorkers: 0,
+    rating: 0,
   });
 
-  const handleLanguageToggle = async () => {
-    const result = await modal.confirm(
-      '选择语言 / Select Language',
-      '请选择您的首选语言 / Please select your preferred language',
-      [
-        { text: '简体中文', value: 'zh' },
-        { text: 'English', value: 'en' },
-        { text: '取消 / Cancel', value: 'cancel' }
-      ]
-    );
-    
-    if (result && result !== 'cancel') {
-      setLanguage(result);
+  // 当页面获得焦点时刷新数据（比如从企业信息页面返回）
+  useFocusEffect(
+    React.useCallback(() => {
+      if (isInitialLoad) {
+        setIsInitialLoad(false);
+        loadUserProfile();
+      } else {
+        // 不是初次加载时，静默刷新（不显示loading）
+        loadUserProfile(false);
+      }
+    }, [isInitialLoad])
+  );
+
+  const loadUserProfile = async (showLoading = true) => {
+    try {
+      if (showLoading) {
+        setLoading(true);
+      }
+      const response = await ApiService.getProfile();
+      
+      if (response && response.user) {
+        const userData = response.user;
+        setUserProfile({
+          id: userData.id,
+          name: userData.contact_person || '未设置',
+          phone: userData.phone || '',
+          position: userData.position || '负责人',
+          company: userData.company_name || '未设置',
+          address: userData.address || '未设置',
+          industry: userData.industry || '',
+          companySize: userData.company_size || '',
+          logoUrl: userData.logo_url || null,
+          email: userData.email || '',
+          rating: userData.rating || 0,
+        });
+
+        // 设置统计数据
+        if (userData.stats) {
+          setStats({
+            activeProjects: userData.stats.active_projects || 0,
+            completedProjects: userData.stats.completed_projects || 0,
+            totalWorkers: userData.stats.total_workers || 0,
+            rating: userData.rating || 0,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Load profile error:', error);
+    } finally {
+      if (showLoading) {
+        setLoading(false);
+      }
+      setRefreshing(false);
     }
+  };
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    loadUserProfile();
   };
 
   const handleLogout = async () => {
-    const confirmed = await modal.confirm(
-      t('confirmLogout'),
-      t('logoutConfirmMessage')
-    );
-    
-    if (confirmed) {
-      logout();
-      // Navigation will be handled by AuthContext
+    try {
+      await logout();
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Login' }],
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
     }
   };
 
-  // Create dynamic styles based on theme
-  const dynamicStyles = {
-    container: {
-      flex: 1,
-      backgroundColor: theme.background,
-    },
-    header: {
-      paddingHorizontal: 16,
-      paddingVertical: 16,
-      backgroundColor: theme.surface,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border,
-    },
-    headerTitle: {
-      fontSize: 24,
-      fontWeight: '700',
-      color: theme.text,
-    },
-    profileHeader: {
-      backgroundColor: theme.surface,
-      alignItems: 'center',
-      paddingVertical: 32,
-      marginBottom: 24,
-    },
-    userName: {
-      fontSize: 20,
-      fontWeight: '600',
-      color: theme.text,
-      marginBottom: 4,
-    },
-    userCompany: {
-      fontSize: 16,
-      color: theme.textSecondary,
-      marginBottom: 4,
-    },
-    userPosition: {
-      fontSize: 14,
-      color: theme.textMuted,
-      marginBottom: 16,
-    },
-    menuSection: {
-      backgroundColor: theme.surface,
-      marginBottom: 24,
-      paddingVertical: 8,
-    },
-    sectionTitle: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: theme.text,
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.borderLight,
-    },
-    menuItem: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 16,
-      paddingVertical: 16,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.borderLight,
-    },
-    menuItemText: {
-      flex: 1,
-      fontSize: 16,
-      color: theme.text,
-      marginLeft: 16,
-    },
+  const MenuSection = ({ title, children }) => (
+    <View style={styles.menuSection}>
+      {title && <Text style={[styles.sectionTitle, { color: theme.text }]}>{title}</Text>}
+      <View style={styles.menuContent}>{children}</View>
+    </View>
+  );
+
+  // 处理未实现的功能
+  const handleComingSoon = (featureName) => {
+    modal.info('功能开发中', `${featureName}功能正在开发中，敬请期待！`);
   };
 
-  return (
-    <SafeAreaView style={dynamicStyles.container}>
-      <View style={dynamicStyles.header}>
-        <Text style={dynamicStyles.headerTitle}>{t('profile')}</Text>
+  const MenuItem = ({ icon, title, subtitle, onPress, showArrow = true, color, comingSoon = false }) => (
+    <TouchableOpacity 
+      style={styles.menuItem} 
+      onPress={comingSoon ? () => handleComingSoon(title) : onPress}
+      activeOpacity={0.7}
+    >
+      <View style={[styles.menuIconContainer, color && { backgroundColor: color + '20' }]}>
+        <Icon name={icon} size={24} color={color || theme.primary} />
       </View>
+      <View style={styles.menuTextContainer}>
+        <Text style={[styles.menuTitle, { color: theme.text }]}>{title}</Text>
+        {subtitle && <Text style={[styles.menuSubtitle, { color: theme.textSecondary }]}>{subtitle}</Text>}
+      </View>
+      {showArrow && <Icon name="chevron-right" size={24} color={theme.textMuted} />}
+    </TouchableOpacity>
+  );
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Profile Header */}
-        <View style={dynamicStyles.profileHeader}>
-          <View style={styles.avatar}>
-            <Icon name="user" size={32} color="#ffffff" />
+  const StatCard = ({ icon, value, label, color }) => (
+    <View style={[styles.statCard, { backgroundColor: theme.surface }]}>
+      <View style={[styles.statIconContainer, { backgroundColor: color + '20' }]}>
+        <Icon name={icon} size={28} color={color} />
+      </View>
+      <Text style={[styles.statValue, { color: theme.text }]}>{value}</Text>
+      <Text style={[styles.statLabel, { color: theme.textSecondary }]}>{label}</Text>
+    </View>
+  );
+
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+        <LoadingSpinner />
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      <ScrollView 
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={theme.primary}
+          />
+        }
+      >
+        {/* Header Profile Card */}
+        <LinearGradient
+          colors={['#1e40af', '#3b82f6']}
+          style={styles.headerGradient}
+        >
+          <View style={styles.profileHeader}>
+            <View style={styles.profileInfo}>
+              <View style={styles.avatarContainer}>
+                <Text style={styles.avatarText}>
+                  {userProfile?.company?.charAt(0) || 'C'}
+                </Text>
+              </View>
+              <View style={styles.profileDetails}>
+                <Text style={styles.companyName}>{userProfile?.company}</Text>
+                <Text style={styles.userName}>{userProfile?.name} · {userProfile?.position}</Text>
+                {stats.rating > 0 && (
+                  <View style={styles.ratingContainer}>
+                    <Icon name="star" size={16} color="#fbbf24" />
+                    <Text style={styles.ratingText}>{stats.rating.toFixed(1)} 企业评分</Text>
+                  </View>
+                )}
+              </View>
+            </View>
           </View>
-          <Text style={dynamicStyles.userName}>{userProfile.name}</Text>
-          <Text style={dynamicStyles.userCompany}>{userProfile.company}</Text>
-          <Text style={dynamicStyles.userPosition}>{userProfile.position}</Text>
-          <TouchableOpacity 
-            style={styles.editProfileButton}
-            onPress={() => setShowEditProfile(true)}
-          >
-            <Icon name="edit" size={14} color="#3b82f6" />
-            <Text style={styles.editProfileText}>{t('editProfile') || '编辑资料'}</Text>
-          </TouchableOpacity>
+        </LinearGradient>
+
+        {/* Statistics Cards */}
+        <View style={styles.statsContainer}>
+          <StatCard 
+            icon="assignment" 
+            value={stats.activeProjects} 
+            label="进行中" 
+            color="#3b82f6" 
+          />
+          <StatCard 
+            icon="check-circle" 
+            value={stats.completedProjects} 
+            label="已完成" 
+            color="#10b981" 
+          />
+          <StatCard 
+            icon="people" 
+            value={stats.totalWorkers} 
+            label="合作工人" 
+            color="#f59e0b" 
+          />
         </View>
 
-        {/* Menu Sections */}
-        <View style={styles.menuSection}>
-          <Text style={styles.sectionTitle}>{t('account')}</Text>
-          
-          <TouchableOpacity 
-            style={styles.menuItem}
-            onPress={() => setShowEditProfile(true)}
-          >
-            <Icon name="user-o" size={20} color="#6b7280" />
-            <Text style={styles.menuItemText}>{t('personalInfo') || '个人信息'}</Text>
-            <Icon name="chevron-right" size={16} color="#9ca3af" />
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.menuItem}
-            onPress={() => setShowCompanySettings(true)}
-          >
-            <Icon name="building-o" size={20} color="#6b7280" />
-            <Text style={styles.menuItemText}>{t('companySettings') || '公司设置'}</Text>
-            <Icon name="chevron-right" size={16} color="#9ca3af" />
-          </TouchableOpacity>
+        {/* Company Management */}
+        <MenuSection title="企业管理">
+          <MenuItem 
+            icon="business"
+            title="企业信息"
+            subtitle="管理企业基本信息和认证"
+            onPress={() => navigation.navigate('CompanyInfo')}
+            color="#3b82f6"
+          />
+          <MenuItem 
+            icon="verified-user"
+            title="资质认证"
+            subtitle="企业资质和证书管理"
+            comingSoon={true}
+            color="#10b981"
+          />
+          <MenuItem 
+            icon="account-balance"
+            title="财务中心"
+            subtitle="账单、发票和支付管理"
+            comingSoon={true}
+            color="#f59e0b"
+          />
+        </MenuSection>
 
-          <TouchableOpacity 
-            style={styles.menuItem}
-            onPress={() => modal.info('功能开发中', '此功能正在开发中，敬请期待。')}
-          >
-            <Icon name="lock" size={20} color="#6b7280" />
-            <Text style={styles.menuItemText}>{t('changePassword') || '修改密码'}</Text>
-            <Icon name="chevron-right" size={16} color="#9ca3af" />
-          </TouchableOpacity>
-        </View>
+        {/* Account Settings */}
+        <MenuSection title="账户设置">
+          <MenuItem 
+            icon="person"
+            title="个人资料"
+            subtitle="联系人信息设置"
+            comingSoon={true}
+          />
+          <MenuItem 
+            icon="security"
+            title="账户安全"
+            subtitle="密码和登录管理"
+            comingSoon={true}
+          />
+          <MenuItem 
+            icon="notifications"
+            title="通知设置"
+            subtitle="消息推送偏好"
+            comingSoon={true}
+          />
+        </MenuSection>
 
-        <View style={styles.menuSection}>
-          <Text style={styles.sectionTitle}>{t('preferences')}</Text>
-          
-          <TouchableOpacity style={styles.menuItem} onPress={handleLanguageToggle}>
-            <Icon name="globe" size={20} color="#6b7280" />
-            <Text style={styles.menuItemText}>{t('language')}</Text>
-            <Text style={styles.menuItemValue}>
-              {currentLanguage === 'zh' ? '简体中文' : 'English'}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.menuItem}
-            onPress={() => setShowNotificationSettings(true)}
-          >
-            <Icon name="bell-o" size={20} color="#6b7280" />
-            <Text style={styles.menuItemText}>{t('notifications') || '通知设置'}</Text>
-            <Icon name="chevron-right" size={16} color="#9ca3af" />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.menuItem}>
-            <Icon name="moon-o" size={20} color="#6b7280" />
-            <Text style={styles.menuItemText}>{t('darkMode') || '深色模式'}</Text>
-            <Switch
-              value={isDarkMode}
-              onValueChange={toggleTheme}
-              trackColor={{ false: '#d1d5db', true: '#3b82f6' }}
-              thumbColor={isDarkMode ? '#ffffff' : '#f3f4f6'}
-            />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.menuSection}>
-          <Text style={styles.sectionTitle}>{t('support')}</Text>
-          
-          <TouchableOpacity 
-            style={styles.menuItem}
-            onPress={() => modal.info('帮助中心', '如需帮助，请联系客服: 400-123-4567')}
-          >
-            <Icon name="question-circle-o" size={20} color="#6b7280" />
-            <Text style={styles.menuItemText}>{t('help') || '帮助中心'}</Text>
-            <Icon name="chevron-right" size={16} color="#9ca3af" />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.menuItem}
-            onPress={() => modal.info('意见反馈', '请发送邮件至: feedback@company.com')}
-          >
-            <Icon name="comments-o" size={20} color="#6b7280" />
-            <Text style={styles.menuItemText}>{t('feedback') || '意见反馈'}</Text>
-            <Icon name="chevron-right" size={16} color="#9ca3af" />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.menuItem}
-            onPress={() => modal.info('关于我们', 'StaffLink v1.0.0\n蓝领工人版Uber\n专业的企业工人调度平台')}
-          >
-            <Icon name="info-circle" size={20} color="#6b7280" />
-            <Text style={styles.menuItemText}>{t('about') || '关于我们'}</Text>
-            <Icon name="chevron-right" size={16} color="#9ca3af" />
-          </TouchableOpacity>
-        </View>
+        {/* Support */}
+        <MenuSection title="支持与服务">
+          <MenuItem 
+            icon="help-outline"
+            title="帮助中心"
+            comingSoon={true}
+          />
+          <MenuItem 
+            icon="feedback"
+            title="意见反馈"
+            comingSoon={true}
+          />
+          <MenuItem 
+            icon="info-outline"
+            title="关于我们"
+            comingSoon={true}
+          />
+          <MenuItem 
+            icon="description"
+            title="服务协议"
+            comingSoon={true}
+          />
+        </MenuSection>
 
         {/* Logout Button */}
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Icon name="sign-out" size={20} color="#ef4444" />
-          <Text style={styles.logoutText}>{t('logout')}</Text>
+        <TouchableOpacity 
+          style={styles.logoutButton} 
+          onPress={handleLogout}
+          activeOpacity={0.8}
+        >
+          <Icon name="logout" size={20} color="#ef4444" />
+          <Text style={styles.logoutText}>退出登录</Text>
         </TouchableOpacity>
 
-        {/* Version Info */}
-        <Text style={styles.versionText}>
-          {t('version') || '版本'} 1.0.0 Beta
-        </Text>
-        
-        {/* App Stats */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>15</Text>
-            <Text style={styles.statLabel}>项目总数</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>128</Text>
-            <Text style={styles.statLabel}>工人总数</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>98%</Text>
-            <Text style={styles.statLabel}>完成率</Text>
-          </View>
-        </View>
+        {/* Version */}
+        <Text style={styles.versionText}>StaffLink Business v2.0.0</Text>
       </ScrollView>
-      
-      {/* Edit Profile Modal */}
-      <Modal
-        visible={showEditProfile}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowEditProfile(false)}>
-              <Text style={styles.cancelButton}>取消</Text>
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>编辑资料</Text>
-            <TouchableOpacity>
-              <Text style={styles.saveButton}>保存</Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView style={styles.modalContent}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>姓名</Text>
-              <TextInput
-                style={styles.textInput}
-                value={userProfile.name}
-                onChangeText={(text) => setUserProfile(prev => ({...prev, name: text}))}
-                placeholder="请输入姓名"
-              />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>邮箱</Text>
-              <TextInput
-                style={styles.textInput}
-                value={userProfile.email}
-                onChangeText={(text) => setUserProfile(prev => ({...prev, email: text}))}
-                placeholder="请输入邮箱"
-                keyboardType="email-address"
-              />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>电话</Text>
-              <TextInput
-                style={styles.textInput}
-                value={userProfile.phone}
-                onChangeText={(text) => setUserProfile(prev => ({...prev, phone: text}))}
-                placeholder="请输入电话"
-                keyboardType="phone-pad"
-              />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>职位</Text>
-              <TextInput
-                style={styles.textInput}
-                value={userProfile.position}
-                onChangeText={(text) => setUserProfile(prev => ({...prev, position: text}))}
-                placeholder="请输入职位"
-              />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>部门</Text>
-              <TextInput
-                style={styles.textInput}
-                value={userProfile.department}
-                onChangeText={(text) => setUserProfile(prev => ({...prev, department: text}))}
-                placeholder="请输入部门"
-              />
-            </View>
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
-      
-      {/* Notification Settings Modal */}
-      <Modal
-        visible={showNotificationSettings}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowNotificationSettings(false)}>
-              <Text style={styles.cancelButton}>取消</Text>
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>通知设置</Text>
-            <TouchableOpacity>
-              <Text style={styles.saveButton}>保存</Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView style={styles.modalContent}>
-            <View style={styles.settingItem}>
-              <Text style={styles.settingLabel}>项目更新通知</Text>
-              <Switch
-                value={notificationSettings.projectUpdates}
-                onValueChange={(value) => setNotificationSettings(prev => ({...prev, projectUpdates: value}))}
-                trackColor={{ false: '#d1d5db', true: '#3b82f6' }}
-              />
-            </View>
-            <View style={styles.settingItem}>
-              <Text style={styles.settingLabel}>工人消息通知</Text>
-              <Switch
-                value={notificationSettings.workerMessages}
-                onValueChange={(value) => setNotificationSettings(prev => ({...prev, workerMessages: value}))}
-                trackColor={{ false: '#d1d5db', true: '#3b82f6' }}
-              />
-            </View>
-            <View style={styles.settingItem}>
-              <Text style={styles.settingLabel}>系统通知</Text>
-              <Switch
-                value={notificationSettings.systemNotifications}
-                onValueChange={(value) => setNotificationSettings(prev => ({...prev, systemNotifications: value}))}
-                trackColor={{ false: '#d1d5db', true: '#3b82f6' }}
-              />
-            </View>
-            <View style={styles.settingItem}>
-              <Text style={styles.settingLabel}>邮件通知</Text>
-              <Switch
-                value={notificationSettings.emailNotifications}
-                onValueChange={(value) => setNotificationSettings(prev => ({...prev, emailNotifications: value}))}
-                trackColor={{ false: '#d1d5db', true: '#3b82f6' }}
-              />
-            </View>
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
-      
-      {/* Company Settings Modal */}
-      <Modal
-        visible={showCompanySettings}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowCompanySettings(false)}>
-              <Text style={styles.cancelButton}>取消</Text>
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>公司设置</Text>
-            <TouchableOpacity>
-              <Text style={styles.saveButton}>保存</Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView style={styles.modalContent}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>公司名称</Text>
-              <TextInput
-                style={styles.textInput}
-                value={companyInfo.name}
-                onChangeText={(text) => setCompanyInfo(prev => ({...prev, name: text}))}
-                placeholder="请输入公司名称"
-              />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>公司地址</Text>
-              <TextInput
-                style={[styles.textInput, styles.textArea]}
-                value={companyInfo.address}
-                onChangeText={(text) => setCompanyInfo(prev => ({...prev, address: text}))}
-                placeholder="请输入公司地址"
-                multiline
-                numberOfLines={3}
-              />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>联系电话</Text>
-              <TextInput
-                style={styles.textInput}
-                value={companyInfo.contact}
-                onChangeText={(text) => setCompanyInfo(prev => ({...prev, contact: text}))}
-                placeholder="请输入联系电话"
-                keyboardType="phone-pad"
-              />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>公司邮箱</Text>
-              <TextInput
-                style={styles.textInput}
-                value={companyInfo.email}
-                onChangeText={(text) => setCompanyInfo(prev => ({...prev, email: text}))}
-                placeholder="请输入公司邮箱"
-                keyboardType="email-address"
-              />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>公司简介</Text>
-              <TextInput
-                style={[styles.textInput, styles.textArea]}
-                value={companyInfo.description}
-                onChangeText={(text) => setCompanyInfo(prev => ({...prev, description: text}))}
-                placeholder="请输入公司简介"
-                multiline
-                numberOfLines={4}
-              />
-            </View>
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
     </SafeAreaView>
   );
 };
@@ -497,82 +310,111 @@ const ProfileScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9fafb',
-  },
-  header: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1f2937',
   },
   scrollView: {
     flex: 1,
   },
+  headerGradient: {
+    paddingTop: Platform.OS === 'ios' ? 20 : 40,
+    paddingBottom: 30,
+  },
   profileHeader: {
-    backgroundColor: '#ffffff',
-    alignItems: 'center',
-    paddingVertical: 32,
-    marginBottom: 24,
+    paddingHorizontal: 20,
   },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#3b82f6',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  userName: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#1f2937',
-    marginBottom: 4,
-  },
-  userCompany: {
-    fontSize: 16,
-    color: '#6b7280',
-    marginBottom: 4,
-  },
-  userPosition: {
-    fontSize: 14,
-    color: '#9ca3af',
-    marginBottom: 16,
-  },
-  editProfileButton: {
+  profileInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#3b82f6',
   },
-  editProfileText: {
+  avatarContainer: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  avatarText: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  profileDetails: {
+    flex: 1,
+  },
+  companyName: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#ffffff',
+    marginBottom: 4,
+  },
+  userName: {
+    fontSize: 15,
+    color: 'rgba(255, 255, 255, 0.9)',
+    marginBottom: 8,
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  ratingText: {
     fontSize: 14,
-    color: '#3b82f6',
-    fontWeight: '500',
+    color: 'rgba(255, 255, 255, 0.9)',
     marginLeft: 6,
   },
-  menuSection: {
+  statsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    marginTop: -15,
+    marginBottom: 20,
+  },
+  statCard: {
+    flex: 1,
     backgroundColor: '#ffffff',
-    marginBottom: 24,
-    paddingVertical: 8,
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 4,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  statIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  menuSection: {
+    marginBottom: 20,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#1f2937',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
+    color: '#6b7280',
+    marginBottom: 12,
+    marginHorizontal: 20,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  menuContent: {
+    backgroundColor: '#ffffff',
+    marginHorizontal: 20,
+    borderRadius: 12,
+    overflow: 'hidden',
   },
   menuItem: {
     flexDirection: 'row',
@@ -582,131 +424,47 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#f3f4f6',
   },
-  menuItemText: {
-    flex: 1,
-    fontSize: 16,
-    color: '#374151',
-    marginLeft: 16,
+  menuIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
   },
-  menuItemValue: {
-    fontSize: 14,
+  menuTextContainer: {
+    flex: 1,
+  },
+  menuTitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  menuSubtitle: {
+    fontSize: 13,
     color: '#6b7280',
-    marginRight: 8,
   },
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#ffffff',
-    marginHorizontal: 16,
-    paddingVertical: 16,
+    backgroundColor: '#fee2e2',
+    marginHorizontal: 20,
+    marginVertical: 20,
+    paddingVertical: 14,
     borderRadius: 12,
-    marginBottom: 24,
   },
   logoutText: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
     color: '#ef4444',
     marginLeft: 8,
   },
   versionText: {
+    textAlign: 'center',
     fontSize: 12,
     color: '#9ca3af',
-    textAlign: 'center',
-    paddingVertical: 8,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#ffffff',
-    marginHorizontal: 16,
-    marginBottom: 24,
-    borderRadius: 12,
-    padding: 20,
-    justifyContent: 'space-around',
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statNumber: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#3b82f6',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#6b7280',
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: '#f9fafb',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  cancelButton: {
-    fontSize: 16,
-    color: '#6b7280',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1f2937',
-  },
-  saveButton: {
-    fontSize: 16,
-    color: '#3b82f6',
-    fontWeight: '600',
-  },
-  modalContent: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-  },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  inputLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#374151',
-    marginBottom: 8,
-  },
-  textInput: {
-    backgroundColor: '#ffffff',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    color: '#374151',
-  },
-  textArea: {
-    height: 80,
-    textAlignVertical: 'top',
-  },
-  settingItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  settingLabel: {
-    fontSize: 16,
-    color: '#374151',
-    flex: 1,
+    marginBottom: 30,
   },
 });
 

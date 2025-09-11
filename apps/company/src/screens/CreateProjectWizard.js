@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   StyleSheet,
   SafeAreaView,
+  BackHandler,
 } from 'react-native';
 import { useLanguage } from '../contexts/LanguageContext';
 import ApiService from '../services/api';
@@ -10,19 +11,24 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useModal } from '../../../../shared/components/Modal/ModalService';
 import LoadingSpinner from '../../../../shared/components/Loading/LoadingSpinner';
 import ProgressBar from '../components/ProgressBar';
+import ProfessionalProgressBar from '../components/createProject/ProfessionalProgressBar';
+import draftManager from '../utils/draftManager';
 
 // Import step components (updated flow)
-import ProjectBasicStep from '../components/createProject/ProjectBasicStep';
+import ProjectBasicStep from '../components/createProject/ProjectBasicStepV2';
 import NewWorkRequirementsStep from '../components/createProject/NewWorkRequirementsStep';
 import NewTimeScheduleStep from '../components/createProject/NewTimeScheduleStep';
 import SelectWorkersStep from '../components/createProject/SelectWorkersStep';
 import NewConfirmSendStep from '../components/createProject/NewConfirmSendStep';
 
-const CreateProjectWizard = ({ navigation }) => {
+const CreateProjectWizard = ({ navigation, route }) => {
   const { t } = useLanguage();
   const [currentStep, setCurrentStep] = useState(1);
+  const [completedSteps, setCompletedSteps] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+  const [draftId, setDraftId] = useState(route?.params?.draftId || null);
   const modal = useModal();
+  const autoSaveCleanup = useRef(null);
   
   // Initial project data
   const getInitialProjectData = () => ({
@@ -64,13 +70,62 @@ const CreateProjectWizard = ({ navigation }) => {
 
   const [projectData, setProjectData] = useState(getInitialProjectData());
 
+  // Load draft if draftId provided
+  useEffect(() => {
+    const loadDraft = async () => {
+      if (draftId) {
+        const draft = await draftManager.loadDraft(draftId);
+        if (draft) {
+          setProjectData(draft.data);
+          setCurrentStep(draft.currentStep || 1);
+          setCompletedSteps(draft.completedSteps || []);
+        }
+      }
+    };
+    loadDraft();
+  }, [draftId]);
+
+  // Set up auto-save
+  useEffect(() => {
+    const cleanup = draftManager.setupAutoSave(
+      () => ({
+        ...projectData,
+        currentStep,
+        completedSteps,
+      }),
+      draftId,
+      30000 // Save every 30 seconds
+    );
+    
+    autoSaveCleanup.current = cleanup;
+    
+    return () => {
+      if (autoSaveCleanup.current) {
+        autoSaveCleanup.current();
+      }
+    };
+  }, [projectData, currentStep, completedSteps, draftId]);
+
+  // Handle back button
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleExit();
+      return true;
+    });
+
+    return () => backHandler.remove();
+  }, []);
+
   // Reset wizard when screen comes into focus (when user taps + button)
   useFocusEffect(
     React.useCallback(() => {
-      console.log('🔄 CreateProjectWizard focused, resetting state...');
-      setCurrentStep(1);
-      setProjectData(getInitialProjectData());
-    }, [])
+      if (!draftId) {
+        console.log('🔄 CreateProjectWizard focused, resetting state...');
+        setCurrentStep(1);
+        setCompletedSteps([]);
+        setProjectData(getInitialProjectData());
+      }
+    }, [draftId])
   );
 
   const handleStepNext = (stepData) => {
@@ -78,6 +133,11 @@ const CreateProjectWizard = ({ navigation }) => {
       ...prev,
       ...stepData,
     }));
+    
+    // Mark current step as completed
+    if (!completedSteps.includes(currentStep)) {
+      setCompletedSteps(prev => [...prev, currentStep]);
+    }
     
     if (currentStep < 5) {
       setCurrentStep(currentStep + 1);
@@ -87,6 +147,36 @@ const CreateProjectWizard = ({ navigation }) => {
   const handleStepBack = () => {
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
+    } else {
+      handleExit();
+    }
+  };
+
+  // Handle exit with save prompt
+  const handleExit = () => {
+    // Only prompt if there's meaningful data
+    if (projectData.projectName || completedSteps.length > 0) {
+      modal.confirm(
+        t('saveDraft') || '保存草稿',
+        t('saveDraftMessage') || '是否保存当前项目为草稿？',
+        async () => {
+          // Save and exit
+          const savedId = await draftManager.saveDraft({
+            ...projectData,
+            currentStep,
+            completedSteps,
+          }, draftId);
+          
+          navigation.navigate('Projects', { 
+            showDraftSaved: true,
+            draftId: savedId 
+          });
+        },
+        () => {
+          // Exit without saving
+          navigation.goBack();
+        }
+      );
     } else {
       navigation.goBack();
     }
@@ -139,6 +229,11 @@ const CreateProjectWizard = ({ navigation }) => {
       const response = await ApiService.createProject(apiProjectData);
       
       if (response) {
+        // Delete draft if exists
+        if (draftId) {
+          await draftManager.deleteDraft(draftId);
+        }
+        
         await modal.success(
           '项目创建成功',
           '项目已成功创建并发布！'
@@ -225,21 +320,44 @@ const CreateProjectWizard = ({ navigation }) => {
     }
   };
 
+  // Define steps for progress bar
+  const steps = [
+    { id: 1, name: t('projectBasicInfoShort') },
+    { id: 2, name: t('workRequirements') },
+    { id: 3, name: t('timeSchedule') },
+    { id: 4, name: t('selectWorkers') },
+    { id: 5, name: t('confirmSend') }
+  ];
+
+  // Handle step navigation from progress bar
+  const handleStepPress = (stepId) => {
+    if (stepId < currentStep && completedSteps.includes(stepId)) {
+      setCurrentStep(stepId);
+    }
+  };
+
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* Progress Bar */}
-      <View style={styles.progressContainer}>
-        <ProgressBar 
-          currentStep={currentStep} 
-          totalSteps={5} 
-          stepLabel={getStepTitle()}
-        />
-      </View>
+      {/* Professional Progress Bar */}
+      <ProfessionalProgressBar 
+        steps={steps}
+        currentStep={currentStep}
+        completedSteps={completedSteps}
+        onStepPress={handleStepPress}
+      />
 
       {/* Current Step Content */}
       <View style={styles.stepContainer}>
         {renderCurrentStep()}
       </View>
+
+      {/* Loading Overlay */}
+      {submitting && (
+        <View style={styles.loadingOverlay}>
+          <LoadingSpinner size="large" />
+        </View>
+      )}
     </SafeAreaView>
   );
 };
@@ -249,15 +367,18 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#ffffff',
   },
-  progressContainer: {
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
-  },
   stepContainer: {
     flex: 1,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

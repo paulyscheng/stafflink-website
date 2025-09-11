@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-// Development configuration
-const DEVELOPMENT_MODE = true; // Set to false to enable Firebase auth for production
-// import authService from '../services/authService'; // Enable for production
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import ApiService from '../services/api';
 
 const AuthContext = createContext();
 
@@ -18,18 +17,33 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Temporarily use mock auth for debugging
-    // Simulate a logged-in user after 1 second
-    const timer = setTimeout(() => {
-      setUser({
-        uid: 'demo-user',
-        email: 'demo@stafflink.com',
-        displayName: 'Demo User'
-      });
-      setLoading(false);
-    }, 1000);
+    // 检查本地存储中是否有登录信息
+    const checkAuthStatus = async () => {
+      try {
+        const token = await AsyncStorage.getItem('authToken');
+        const companyInfo = await AsyncStorage.getItem('companyInfo');
+        
+        if (token && companyInfo) {
+          // 如果有token，恢复用户信息
+          const userInfo = JSON.parse(companyInfo);
+          setUser({
+            uid: userInfo.id,
+            email: userInfo.email || userInfo.phone,
+            displayName: userInfo.name || userInfo.contact_person,
+            ...userInfo
+          });
+          console.log('Restored user from AsyncStorage');
+        } else {
+          console.log('No stored auth info found');
+        }
+      } catch (error) {
+        console.error('Error checking auth status:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    return () => clearTimeout(timer);
+    checkAuthStatus();
     
     /* Original Firebase auth code - temporarily disabled
     let unsubscribe;
@@ -155,9 +169,28 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     setLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 300));
-    setUser(null);
-    setLoading(false);
+    
+    try {
+      // 清除本地存储的所有认证信息
+      await AsyncStorage.removeItem('authToken');
+      await AsyncStorage.removeItem('companyId');
+      await AsyncStorage.removeItem('companyInfo');
+      
+      // 使用 ApiService 的 logout 方法（它也会清除 AsyncStorage）
+      await ApiService.logout();
+      
+      // 清除内存中的用户状态
+      setUser(null);
+      
+      console.log('Logout successful, all data cleared');
+    } catch (error) {
+      console.error('Logout error:', error);
+      // 即使出错也要清除本地状态
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
+    
     return { success: true };
   };
 

@@ -70,6 +70,7 @@ const JobDetailScreen = ({ route, navigation }) => {
   }, [jobId]);
   
   const job = invitation || getJob(jobId);
+  console.log("job data is:", job)
 
   if (loading) {
     return (

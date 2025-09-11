@@ -58,24 +58,23 @@ const sendVerificationCode = async (req, res, next) => {
       code = Math.floor(100000 + Math.random() * 900000).toString();
     }
     
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
-
     // Store code in database with user_type
     const userType = req.body.userType || 'worker'; // Get from request
     const storeCodeQuery = `
-      INSERT INTO verification_codes (phone, code, user_type, purpose, expires_at, ip_address, user_agent)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING id
+      INSERT INTO verification_codes (phone, code, user_type, purpose, expires_at, ip_address, user_agent, created_at)
+      VALUES ($1, $2, $3, $4, NOW() + INTERVAL '30 minutes', $5, $6, NOW())
+      RETURNING id, expires_at, created_at
     `;
-    await db.query(storeCodeQuery, [
+    const storeResult = await db.query(storeCodeQuery, [
       phone, 
       code, 
       userType,
       purpose, 
-      expiresAt,
       req.ip || req.connection.remoteAddress,
       req.headers['user-agent']
     ]);
+    
+    logger.debug(`Verification code stored for ${phone}, expires at: ${storeResult.rows[0].expires_at}`);
 
     // Send SMS
     if (config.sms.enabled && config.isProduction) {
@@ -127,54 +126,48 @@ const login = async (req, res, next) => {
 
     const { phone, code, userType } = req.body;
 
-    // 开发环境下的测试验证码
-    let codeValid = false;
+    logger.info(`🔍 [LOGIN] Attempt - Phone: ${phone}, UserType: ${userType}, Code: ${code?.substring(0, 3)}***`);
+
+    // Verify verification code
+    const codeQuery = `
+      SELECT * FROM verification_codes 
+      WHERE phone = $1 AND code = $2 AND purpose IN ('login', 'register')
+      AND expires_at > NOW() AND is_used = false
+      ORDER BY created_at DESC LIMIT 1
+    `;
     
-    if (process.env.NODE_ENV === 'development') {
-      const testCodes = {
-        // 工人测试账号
-        '13800138001': '123456', // 张师傅/李师傅 - 主测试账号
-        '13800138002': '123456', // 李师傅
-        '13800138003': '123457', // 王师傅
-        '13800138004': '123458', // 赵师傅
-        '13800138005': '123451', // 刘师傅
-        '13800138006': '234510', // 陈阿姨
-        '13800138007': '123454', // 孙师傅
-        '13800138008': '123453', // 周师傅
-        '13800138009': '123452', // 吴师傅
-        '13800138010': '123459', // 郑阿姨
-        '13800138000': '123456', // 测试账号
-        // 企业测试账号
-        '13900139000': '123456', // 蓝领科技有限公司
-      };
-      
-      if (testCodes[phone] && testCodes[phone] === code) {
-        codeValid = true;
-        logger.info(`Development mode: Test code accepted for ${phone}`);
-      }
+    logger.info(`🔍 [LOGIN] Checking verification code...`);
+    const codeResult = await db.query(codeQuery, [phone, code]);
+    logger.info(`📊 [LOGIN] Verification code query result: Found ${codeResult.rows.length} valid codes`);
+    
+    if (codeResult.rows.length > 0) {
+      const validCode = codeResult.rows[0];
+      logger.info(`✅ [LOGIN] Valid code found - Created: ${validCode.created_at}, Expires: ${validCode.expires_at}`);
     }
-    
-    // 如果不是测试验证码，进行正常验证
-    if (!codeValid) {
-      const codeQuery = `
-        SELECT * FROM verification_codes 
-        WHERE phone = $1 AND code = $2 AND purpose = 'login' 
-        AND expires_at > NOW() AND is_used = false
-        ORDER BY created_at DESC LIMIT 1
+
+    if (codeResult.rows.length === 0) {
+      // 额外查询以了解为什么找不到验证码
+      const allCodesQuery = `
+        SELECT code, purpose, is_used, expires_at, created_at 
+        FROM verification_codes 
+        WHERE phone = $1 
+        ORDER BY created_at DESC 
+        LIMIT 5
       `;
-      const codeResult = await db.query(codeQuery, [phone, code]);
-
-      if (codeResult.rows.length === 0) {
-        return res.status(400).json({
-          success: false,
-          error: 'Invalid or expired verification code'
-        });
-      }
-
-      // Mark code as used
-      const markUsedQuery = 'UPDATE verification_codes SET is_used = true WHERE id = $1';
-      await db.query(markUsedQuery, [codeResult.rows[0].id]);
+      const allCodes = await db.query(allCodesQuery, [phone]);
+      logger.warn(`⚠️ [LOGIN] No valid code found. Recent codes for ${phone}:`);
+      allCodes.rows.forEach((c, i) => {
+        logger.warn(`  ${i+1}. Code: ${c.code}, Purpose: ${c.purpose}, Used: ${c.is_used}, Expires: ${c.expires_at}`);
+      });
+      
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid or expired verification code'
+      });
     }
+
+    // Mark code as used only after verifying user exists
+    let codeId = codeResult.rows[0].id;
 
     // Find user by phone and type
     let userQuery;
@@ -184,9 +177,12 @@ const login = async (req, res, next) => {
       userQuery = 'SELECT * FROM workers WHERE phone = $1';
     }
 
+    logger.info(`🔍 [LOGIN] Looking for user in ${userType} table...`);
     const userResult = await db.query(userQuery, [phone]);
+    logger.info(`📊 [LOGIN] User query result: Found ${userResult.rows.length} users`);
 
     if (userResult.rows.length === 0) {
+      logger.warn(`⚠️ [LOGIN] User not found - Phone: ${phone}, Type: ${userType}`);
       return res.status(404).json({
         success: false,
         error: 'User not found. Please register first.'
@@ -194,6 +190,11 @@ const login = async (req, res, next) => {
     }
 
     const user = userResult.rows[0];
+    logger.info(`✅ [LOGIN] User found - ID: ${user.id}, Name: ${user.name || user.company_name}`);
+    
+    // Now mark code as used since we found the user
+    const markUsedQuery = 'UPDATE verification_codes SET is_used = true WHERE id = $1';
+    await db.query(markUsedQuery, [codeId]);
 
     // Generate and store token
     const token = generateToken(user.id, userType);
@@ -205,7 +206,7 @@ const login = async (req, res, next) => {
       : 'UPDATE workers SET updated_at = CURRENT_TIMESTAMP WHERE id = $1';
     await db.query(updateLastLoginQuery, [user.id]);
 
-    logger.info(`User logged in: ${user.id} (${userType})`);
+    logger.info(`✅ [LOGIN] Success - User logged in: ${user.id} (${userType})`);
 
     // 根据用户类型返回不同的信息
     let userData;
@@ -230,7 +231,11 @@ const login = async (req, res, next) => {
         name: user.company_name,
         phone: user.phone,
         contact_person: user.contact_person,
+        position: user.position,
         address: user.address,
+        industry: user.industry,
+        company_size: user.company_size,
+        logo_url: user.logo_url,
         rating: user.rating,
         type: userType
       };
@@ -263,22 +268,45 @@ const register = async (req, res, next) => {
       });
     }
 
-    const { phone, code, userType, name, ...otherData } = req.body;
+    const { phone, code, userType, name, password, ...otherData } = req.body;
 
-    // Verify SMS code
-    const codeQuery = `
-      SELECT * FROM sms_codes 
-      WHERE phone = $1 AND code = $2 AND purpose IN ('register', 'login')
-      AND expires_at > NOW() AND used = false
-      ORDER BY created_at DESC LIMIT 1
-    `;
-    const codeResult = await db.query(codeQuery, [phone, code]);
+    // Check if it's a test account in development mode
+    let codeValid = false;
+    let codeId = null;
+    
+    if (process.env.NODE_ENV === 'development' && code === '123456') {
+      // In development, accept test code for any new registration
+      const testPhones = [
+        '13900139000', '13900139001', '13900139002', '13900139003',
+        '13900139004', '13900139005', '13900139006', '13900139007',
+        '13900139008', '13900139009'
+      ];
+      
+      // Check if it's a test phone or any phone in development
+      if (testPhones.includes(phone) || process.env.NODE_ENV === 'development') {
+        codeValid = true;
+        logger.info(`Development mode: Test code accepted for new registration ${phone}`);
+      }
+    }
+    
+    // If not using test code, verify the actual code
+    if (!codeValid) {
+      const codeQuery = `
+        SELECT * FROM verification_codes 
+        WHERE phone = $1 AND code = $2 AND purpose IN ('register', 'login')
+        AND expires_at > NOW() AND is_used = false
+        ORDER BY created_at DESC LIMIT 1
+      `;
+      const codeResult = await db.query(codeQuery, [phone, code]);
 
-    if (codeResult.rows.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid or expired verification code'
-      });
+      if (codeResult.rows.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid or expired verification code'
+        });
+      }
+      
+      codeId = codeResult.rows[0].id;
     }
 
     // Check if user already exists
@@ -297,16 +325,25 @@ const register = async (req, res, next) => {
       });
     }
 
-    // Mark code as used
-    const markUsedQuery = 'UPDATE sms_codes SET used = true WHERE id = $1';
-    await db.query(markUsedQuery, [codeResult.rows[0].id]);
+    // Mark code as used (only if not using test code)
+    if (codeId) {
+      const markUsedQuery = 'UPDATE verification_codes SET is_used = true WHERE id = $1';
+      await db.query(markUsedQuery, [codeId]);
+    }
+
+    // Hash password if provided
+    let hashedPassword = null;
+    if (password) {
+      const salt = await bcrypt.genSalt(10);
+      hashedPassword = await bcrypt.hash(password, salt);
+    }
 
     // Create new user
     let createUserQuery, userData;
     if (userType === 'company') {
       createUserQuery = `
-        INSERT INTO companies (company_name, contact_person, phone, email, address)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO companies (company_name, contact_person, phone, email, address, industry, position, company_size, logo_url, password)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING *
       `;
       userData = [
@@ -314,7 +351,12 @@ const register = async (req, res, next) => {
         otherData.contactPerson || name,
         phone,
         otherData.email || null,
-        otherData.address || null
+        otherData.address || null,
+        otherData.industry || null,
+        otherData.position || null,
+        otherData.companySize || null,
+        otherData.logoUrl || null,
+        hashedPassword
       ];
     } else {
       createUserQuery = `
@@ -402,16 +444,74 @@ const refreshToken = async (req, res, next) => {
 // @access  Private
 const getMe = async (req, res, next) => {
   try {
-    const user = { ...req.user };
-    delete user.type; // Remove internal type field
-
-    res.status(200).json({
-      success: true,
-      user: {
-        ...user,
-        userType: req.user.type
-      }
-    });
+    // Get fresh user data from database
+    let userQuery;
+    if (req.user.type === 'company') {
+      userQuery = `
+        SELECT 
+          id, company_name, contact_person, position, phone, email, 
+          address, industry, company_size, logo_url, rating, 
+          total_projects, status, created_at,
+          (SELECT COUNT(*) FROM projects WHERE company_id = companies.id AND status = 'active') as active_projects,
+          (SELECT COUNT(*) FROM projects WHERE company_id = companies.id AND status = 'completed') as completed_projects
+        FROM companies 
+        WHERE id = $1
+      `;
+    } else {
+      userQuery = `
+        SELECT 
+          id, name, phone, age, gender, address, rating, 
+          experience_years, completed_jobs, total_jobs, status, created_at
+        FROM workers 
+        WHERE id = $1
+      `;
+    }
+    
+    const result = await db.query(userQuery, [req.user.id]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+    
+    const user = result.rows[0];
+    
+    // Format response based on user type
+    if (req.user.type === 'company') {
+      res.status(200).json({
+        success: true,
+        user: {
+          id: user.id,
+          company_name: user.company_name,
+          contact_person: user.contact_person,
+          position: user.position,
+          phone: user.phone,
+          email: user.email,
+          address: user.address,
+          industry: user.industry,
+          company_size: user.company_size,
+          logo_url: user.logo_url,
+          verified: user.status === 'active',
+          created_at: user.created_at,
+          stats: {
+            active_projects: parseInt(user.active_projects) || 0,
+            completed_projects: parseInt(user.completed_projects) || 0,
+            total_workers: 0 // TODO: Calculate from invitations
+          },
+          userType: 'company'
+        }
+      });
+    } else {
+      res.status(200).json({
+        success: true,
+        user: {
+          ...user,
+          userType: 'worker'
+        }
+      });
+    }
 
   } catch (error) {
     logger.error('Get me error:', error);

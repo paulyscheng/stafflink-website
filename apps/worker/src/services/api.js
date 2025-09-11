@@ -84,6 +84,8 @@ class ApiService {
 
   async login(phone, code) {
     // 登录请求不需要token，直接调用fetch
+    console.log(`📱 [Worker App] Attempting login - Phone: ${phone}, Code: ${code?.substring(0, 3)}***`);
+    
     try {
       const response = await fetch(`${this.baseURL}/auth/login`, {
         method: 'POST',
@@ -97,12 +99,16 @@ class ApiService {
         })
       });
 
+      console.log(`📱 [Worker App] Login response status: ${response.status}`);
+
       if (!response.ok) {
         const error = await response.json();
+        console.error(`❌ [Worker App] Login failed with status ${response.status}:`, error);
         throw new Error(error.error || 'Login failed');
       }
 
       const data = await response.json();
+      console.log(`✅ [Worker App] Login successful for user: ${data.user?.id}`);
 
       if (data.token) {
         await AsyncStorage.setItem('authToken', data.token);
@@ -145,6 +151,7 @@ class ApiService {
   // Invitations endpoints
   async getInvitations(status = null) {
     const query = status ? `?status=${status}` : '';
+    console.log("query is:",query);
     const data = await this.request(`/invitations/worker${query}`);
     
     // Transform snake_case to camelCase for the app
@@ -166,16 +173,16 @@ class ApiService {
         startTime: inv.start_time,
         endTime: inv.end_time,
         workDescription: inv.work_description,
-        message: inv.message,
+        message: '', // invitations表中没有message字段
         status: inv.status,
         createdAt: inv.created_at,
         expiresAt: inv.expires_at,
-        // Mock additional fields for now
-        requiredSkills: ['电工', '水管工'],
-        distance: 2.5,
-        urgency: inv.message?.includes('紧急') ? 'urgent' : 'normal',
-        estimatedDuration: '8小时',
-        requiredWorkers: 1
+        // Real fields from API
+        requiredSkills: inv.required_skills ? inv.required_skills.map(s => s.skill_name) : [],
+        distance: 2.5, // TODO: Calculate real distance based on worker and project location
+        urgency: inv.priority || 'normal',
+        estimatedDuration: inv.estimated_duration || '1天',
+        requiredWorkers: inv.required_workers || 1
       }));
     }
     return data;
@@ -204,15 +211,15 @@ class ApiService {
           startTime: inv.start_time,
           endTime: inv.end_time,
           workDescription: inv.work_description,
-          message: inv.message,
+          message: '', // invitations表中没有message字段
           status: inv.status,
           createdAt: inv.created_at,
           expiresAt: inv.expires_at,
-          // Mock additional fields for now
-          requiredSkills: ['电工', '水管工'],
-          distance: 2.5,
-          urgency: inv.message?.includes('紧急') ? 'urgent' : 'normal',
-          estimatedDuration: '8小时',
+          // Real fields from API
+          requiredSkills: inv.required_skills ? inv.required_skills.map(s => s.skill_name) : [],
+          distance: 2.5, // TODO: Calculate real distance
+          urgency: inv.priority || 'normal',
+          estimatedDuration: inv.estimated_duration || '1天',
           requiredWorkers: inv.required_workers || 1,
           companyContact: {
             name: inv.contact_person || '联系人',
@@ -246,7 +253,7 @@ class ApiService {
             startTime: job.start_time || '09:00',
             endTime: job.end_time || '18:00',
             workDescription: job.project_description || job.work_description,
-            message: '',
+            message: '', // 没有message字段
             status: job.status === 'active' ? 'accepted' : job.status,
             createdAt: job.created_at,
             // 工作相关的额外字段
@@ -255,12 +262,12 @@ class ApiService {
             workerConfirmed: job.worker_confirmed,
             companyConfirmed: job.company_confirmed,
             paymentStatus: job.payment_status,
-            // Mock fields
-            requiredSkills: ['电工', '水管工'],
-            distance: 2.5,
-            urgency: 'normal',
-            estimatedDuration: job.project_duration || '8小时',
-            requiredWorkers: 1,
+            // Real fields from job data
+            requiredSkills: job.required_skills ? job.required_skills.map(s => s.skill_name || s) : [],
+            distance: 2.5, // TODO: Calculate real distance
+            urgency: job.priority || 'normal',
+            estimatedDuration: job.estimated_duration || job.project_duration || '1天',
+            requiredWorkers: job.required_workers || 1,
             companyContact: {
               name: job.contact_person || '联系人',
               phone: job.company_phone || '暂无'
@@ -311,14 +318,17 @@ class ApiService {
         status: job.status,
         workDescription: job.work_description,
         // Additional fields for display
-        requiredSkills: job.requirements || ['电工', '水管工'],
-        distance: 2.5,
-        urgency: 'normal',
-        estimatedDuration: '8小时',
-        companyRating: 4.5,
+        requiredSkills: job.required_skills ? 
+          (Array.isArray(job.required_skills) ? 
+            job.required_skills.map(s => typeof s === 'object' ? s.skill_name : s) : 
+            []) : [],
+        distance: 2.5, // TODO: Calculate real distance
+        urgency: job.priority || 'normal',
+        estimatedDuration: job.estimated_duration || '1天',
+        companyRating: job.company_rating || 4.5,
         requiredWorkers: job.required_workers || 1,
         companyContact: {
-          name: job.company_contact || '联系人',
+          name: job.contact_person || job.company_contact || '联系人',
           phone: job.company_phone || '暂无'
         }
       }));

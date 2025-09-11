@@ -11,6 +11,8 @@ import Icon from 'react-native-vector-icons/FontAwesome';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useModal } from '../../../../shared/components/Modal/ModalService';
+import ApiService from '../services/api';
+import { useNavigation } from '@react-navigation/native';
 
 const PhoneRegisterForm = ({ onToggleForm, onStartOnboarding }) => {
   // Remove login mode - only phone verification for registration
@@ -25,8 +27,11 @@ const PhoneRegisterForm = ({ onToggleForm, onStartOnboarding }) => {
   const [confirmationResult, setConfirmationResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [actualVerificationCode, setActualVerificationCode] = useState(null);
   const { t } = useLanguage();
   const { sendPhoneVerification, verifyPhoneCode, login, register, signInWithGoogle, signInWithApple, signInWithWeChat } = useAuth();
+  const modal = useModal();
+  const navigation = useNavigation();
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
@@ -55,12 +60,20 @@ const PhoneRegisterForm = ({ onToggleForm, onStartOnboarding }) => {
     }
 
     try {
-      const result = await sendPhoneVerification(phoneNumber);
+      // 使用真实的 API 调用发送验证码
+      const cleanPhone = phoneNumber.replace(/^\+86/, ''); // 去掉国家码
+      const response = await ApiService.sendCode(cleanPhone, 'company', 'register');
       
-      if (result.success) {
-        setConfirmationResult(result.confirmationResult);
+      if (response && response.success) {
         setCodeSent(true);
         setCountdown(60);
+        
+        // 在开发环境显示验证码
+        if (response.code) {
+          setActualVerificationCode(response.code);
+          console.log('🔑 验证码:', response.code);
+          modal.info('开发环境验证码', `验证码: ${response.code}`);
+        }
         
         // 倒计时
         const timer = setInterval(() => {
@@ -73,7 +86,7 @@ const PhoneRegisterForm = ({ onToggleForm, onStartOnboarding }) => {
           });
         }, 1000);
       } else {
-        modal.error(t('sendFailed'), result.error || t('pleaseTryAgainLater'));
+        modal.error(t('sendFailed'), response?.error || t('pleaseTryAgainLater'));
       }
     } catch (error) {
       modal.error(t('sendFailed'), t('networkError'));
@@ -93,7 +106,7 @@ const PhoneRegisterForm = ({ onToggleForm, onStartOnboarding }) => {
       return;
     }
     
-    if (!confirmationResult) {
+    if (!codeSent) {
       modal.error(t('error'), t('pleaseGetVerificationCode'));
       return;
     }
@@ -101,22 +114,37 @@ const PhoneRegisterForm = ({ onToggleForm, onStartOnboarding }) => {
     setLoading(true);
     
     try {
-      const result = await verifyPhoneCode(confirmationResult, formData.verificationCode);
+      // 直接尝试登录，如果用户不存在会返回特定错误
+      const cleanPhone = formData.phoneNumber.replace(/^\+86/, '').replace(/^\+1/, '');
+      console.log('Attempting login with:', { phone: cleanPhone, code: formData.verificationCode });
       
-      if (result.success) {
-        // Navigate to onboarding flow instead of showing popup
+      const loginResponse = await ApiService.login(cleanPhone, formData.verificationCode);
+      
+      if (loginResponse && loginResponse.token) {
+        // 用户已存在，直接登录成功
+        console.log('Existing user logged in successfully');
+        navigation.replace('Main');
+      }
+    } catch (error) {
+      // 如果是用户不存在的错误，进入注册流程
+      if (error.message && (error.message.includes('not found') || error.message.includes('User not found'))) {
+        // 用户不存在，进入 onboarding 流程创建新账号
+        console.log('User does not exist, starting onboarding flow');
         if (onStartOnboarding) {
           let phoneNumber = formData.phoneNumber;
           if (!phoneNumber.startsWith('+')) {
             phoneNumber = phoneNumber === '8579957792' ? '+1' + phoneNumber : '+86' + phoneNumber;
           }
-          onStartOnboarding({ phoneNumber: phoneNumber, user: result.user });
+          onStartOnboarding({ 
+            phoneNumber: phoneNumber,
+            verificationCode: formData.verificationCode // 传递验证码用于后续注册
+          });
         }
       } else {
-        modal.error(t('verificationFailed'), result.error || t('incorrectVerificationCode'));
+        // 其他错误（如验证码错误）
+        console.error('Login error:', error);
+        modal.error(t('verificationFailed'), error.message || t('incorrectVerificationCode'));
       }
-    } catch (error) {
-      modal.error(t('verificationFailed'), t('networkError'));
     } finally {
       setLoading(false);
     }

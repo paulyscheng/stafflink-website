@@ -15,6 +15,7 @@ import NotificationScreen from './src/screens/NotificationScreen';
 import CompletedJobsScreen from './src/screens/CompletedJobsScreen';
 import ConfirmJobScreen from './src/screens/ConfirmJobScreen';
 import PaymentScreen from './src/screens/PaymentScreen';
+import CompanyInfoScreen from './src/screens/CompanyInfoScreen';
 
 const Stack = createStackNavigator();
 
@@ -40,6 +41,7 @@ export default function App() {
                     <Stack.Screen name="CompletedJobs" component={CompletedJobsScreen} />
                     <Stack.Screen name="ConfirmJob" component={ConfirmJobScreen} />
                     <Stack.Screen name="Payment" component={PaymentScreen} />
+                    <Stack.Screen name="CompanyInfo" component={CompanyInfoScreen} />
                   </Stack.Navigator>
                 </NavigationContainer>
               </ModalProvider>

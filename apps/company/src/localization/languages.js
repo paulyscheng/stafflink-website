@@ -38,6 +38,8 @@ export const languages = {
     loginHere: "在此登录",
     or: "或",
     agreeToTerms: "我已阅读并同意",
+    noAccount: "没有账户？",
+    registerNow: "立即注册",
     
     // Company Information
     companyInformation: "公司信息",
@@ -274,6 +276,7 @@ export const languages = {
     
     // Project Creation Wizard
     projectBasicInfo: "项目基础信息",
+    projectBasicInfoShort: "基础信息",
     timeSchedule: "时间安排",
     workRequirements: "工作要求",
     selectWorkers: "选择工人",
@@ -443,6 +446,18 @@ export const languages = {
     enterExactCount: "请输入具体人数",
     peopleCount: "人",
     customWorkerCount: "自定义人数",
+    preciseCount: "精确人数",
+    largeTeamNote: "大型团队建议分批安排",
+    
+    // Skill Selection
+    searchSkills: "搜索技能...",
+    selectedSkills: "已选择",
+    clearAll: "清除全部",
+    commonSkills: "常用技能",
+    otherSkills: "其他技能",
+    moreSkills: "更多技能",
+    noSkillsFound: "未找到相关技能",
+    searchResults: "搜索结果",
     experienceRequirement: "经验要求",
     selectExperienceLevel: "选择对工人经验的要求",
     workDescriptionLabel: "工作描述*",
@@ -468,7 +483,7 @@ export const languages = {
     fillCompleteWorkInfo: "请填写完整的工作要求信息",
     
     // Skills - Construction & Renovation
-    plumbingInstall: "水电安装",
+    plumbingInstall: "水管安装",
     electrician: "电工",
     carpentry: "木工", 
     painting: "油漆",
@@ -625,6 +640,24 @@ export const languages = {
     // Common Actions
     hint: "提示",
     
+    // Draft Management
+    saveDraft: "保存草稿",
+    saveDraftMessage: "是否保存当前项目为草稿？",
+    draftSaved: "草稿已保存",
+    loadDraft: "加载草稿",
+    deleteDraft: "删除草稿",
+    drafts: "草稿",
+    noDrafts: "暂无草稿",
+    lastModified: "最后修改",
+    continueDraft: "继续编辑",
+    
+    // Cost Preview
+    estimatedCost: "预计费用",
+    laborCost: "人工费用",
+    platformServiceFee: "平台服务费",
+    totalCost: "总费用",
+    costTip: "实际费用以工作完成后的结算为准",
+    
     // Time and Currency Units
     hour: "小时",
     day: "天",
@@ -670,6 +703,8 @@ export const languages = {
     loginHere: "Log in",
     or: "OR",
     agreeToTerms: "I have read and agree to",
+    noAccount: "Don't have an account?",
+    registerNow: "Register Now",
     
     // Company Information
     companyInformation: "Company Information",
@@ -1075,6 +1110,18 @@ export const languages = {
     enterExactCount: "Please enter exact number",
     peopleCount: "people",
     customWorkerCount: "Custom worker count",
+    preciseCount: "Precise Count",
+    largeTeamNote: "Large teams are recommended to be scheduled in batches",
+    
+    // Skill Selection
+    searchSkills: "Search skills...",
+    selectedSkills: "Selected",
+    clearAll: "Clear All",
+    commonSkills: "Common Skills",
+    otherSkills: "Other Skills",
+    moreSkills: "More Skills",
+    noSkillsFound: "No skills found",
+    searchResults: "Search Results",
     experienceRequirement: "Experience Requirement",
     selectExperienceLevel: "Select experience level requirement for workers",
     workDescriptionLabel: "Work Description*",
@@ -1238,6 +1285,24 @@ export const languages = {
     
     // Common Actions
     hint: "Hint",
+    
+    // Draft Management
+    saveDraft: "Save Draft",
+    saveDraftMessage: "Would you like to save the current project as draft?",
+    draftSaved: "Draft Saved",
+    loadDraft: "Load Draft",
+    deleteDraft: "Delete Draft",
+    drafts: "Drafts",
+    noDrafts: "No Drafts",
+    lastModified: "Last Modified",
+    continueDraft: "Continue Editing",
+    
+    // Cost Preview
+    estimatedCost: "Estimated Cost",
+    laborCost: "Labor Cost",
+    platformServiceFee: "Platform Service Fee",
+    totalCost: "Total Cost",
+    costTip: "Actual costs will be calculated upon completion",
     
     // Time and Currency Units
     hour: "hour",

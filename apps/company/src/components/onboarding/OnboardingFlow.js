@@ -11,13 +11,13 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import Step1BasicInfo from './Step1BasicInfo';
 import Step2CompanyInfo from './Step2CompanyInfo';
 import Step3IndustrySelection from './Step3IndustrySelection';
-import Step4BusinessSetup from './Step4BusinessSetup';
-import Step5Complete from './Step5Complete';
+import Step4CreatePassword from './Step5Complete'; // Using Step5Complete as Step4
 
 const OnboardingFlow = ({ initialData, onComplete, onBack }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [onboardingData, setOnboardingData] = useState({
     phoneNumber: initialData?.phoneNumber || '',
+    verificationCode: initialData?.verificationCode || '',
     user: initialData?.user || null,
     step1Data: null,
     step2Data: null,
@@ -52,17 +52,9 @@ const OnboardingFlow = ({ initialData, onComplete, onBack }) => {
   };
 
   const handleStep4Next = (step4Data) => {
-    setOnboardingData(prev => ({
-      ...prev,
-      step4Data: step4Data,
-    }));
-    setCurrentStep(5);
-  };
-
-  const handleStep5Next = (step5Data) => {
     const completeData = {
       ...onboardingData,
-      step5Data: step5Data,
+      step4Data: step4Data,
     };
     setOnboardingData(completeData);
     
@@ -94,6 +86,7 @@ const OnboardingFlow = ({ initialData, onComplete, onBack }) => {
             onNext={handleStep1Next}
             onBack={handleBack}
             initialPhoneNumber={onboardingData.phoneNumber}
+            initialData={onboardingData.step1Data}
           />
         );
       case 2:
@@ -101,7 +94,7 @@ const OnboardingFlow = ({ initialData, onComplete, onBack }) => {
           <Step2CompanyInfo
             onNext={handleStep2Next}
             onBack={handleBack}
-            initialData={onboardingData.step1Data}
+            initialData={onboardingData.step2Data}
           />
         );
       case 3:
@@ -109,21 +102,13 @@ const OnboardingFlow = ({ initialData, onComplete, onBack }) => {
           <Step3IndustrySelection
             onNext={handleStep3Next}
             onBack={handleBack}
-            initialData={onboardingData.step2Data}
+            initialData={onboardingData.step3Data}
           />
         );
       case 4:
         return (
-          <Step4BusinessSetup
+          <Step4CreatePassword
             onNext={handleStep4Next}
-            onBack={handleBack}
-            initialData={onboardingData.step3Data}
-          />
-        );
-      case 5:
-        return (
-          <Step5Complete
-            onNext={handleStep5Next}
             onBack={handleBack}
             initialData={{
               ...onboardingData,

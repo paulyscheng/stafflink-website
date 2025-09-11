@@ -15,6 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { FontAwesome as Icon } from '@expo/vector-icons';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
+import ApiService from '../services/api';
 
 const LoginScreen = ({ navigation }) => {
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -53,10 +54,16 @@ const LoginScreen = ({ navigation }) => {
 
     // 调用实际的API发送验证码
     try {
-      // 实际发送逻辑将通过AuthContext处理
-      console.log('Sending verification code to:', phoneNumber);
+      const response = await ApiService.sendVerificationCode(phoneNumber);
+      console.log('Verification code sent successfully');
+      // TODO: 使用自定义Toast替代
+      alert('验证码已发送');
     } catch (error) {
       console.error('Failed to send code:', error);
+      // TODO: 使用自定义Toast替代
+      alert('发送验证码失败: ' + (error.message || '请稍后重试'));
+      // 重置倒计时
+      setCountdown(0);
     }
   };
 

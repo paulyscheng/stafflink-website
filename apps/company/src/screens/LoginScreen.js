@@ -66,21 +66,23 @@ const LoginScreen = ({ navigation }) => {
     try {
       // 注册新企业
       const registerData = {
-        phone: completeData.phoneNumber.replace('+86', ''), // 去掉国家码
-        code: '123456', // 开发环境使用固定验证码
+        phone: completeData.phoneNumber.replace('+86', '').trim(), // 去掉国家码
+        code: completeData.verificationCode, // 使用用户输入的验证码
         userType: 'company',
         name: completeData.step2Data?.companyName || 'Test Company',
         contactPerson: completeData.step1Data?.contactName,
-        email: completeData.step1Data?.email,
+        position: completeData.step1Data?.position,
         address: completeData.step2Data?.businessAddress,
+        industry: completeData.step3Data?.industry,
+        companySize: completeData.step2Data?.companySize,
+        logoUrl: completeData.step2Data?.logoUrl,
+        password: completeData.step4Data?.password,
       };
       
-      // 先发送验证码（开发环境会返回验证码）
-      const codeResponse = await ApiService.sendCode(registerData.phone);
-      console.log('Verification code sent');
+      console.log('Register data:', JSON.stringify(registerData, null, 2));
       
-      // 然后注册
-      const response = await ApiService.login(registerData.phone, registerData.code);
+      // 直接注册，不再重复发送验证码
+      const response = await ApiService.register(registerData);
       
       if (response && response.token) {
         console.log('Company registered and logged in successfully');
