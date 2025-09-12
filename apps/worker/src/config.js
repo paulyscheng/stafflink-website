@@ -2,7 +2,7 @@
 // 开发环境使用本机IP地址，生产环境使用真实域名
 // 开发者需要修改这里的IP地址为自己电脑的IP
 //const DEV_API_URL = 'http://121.234.75.251:3000/api';
-const DEV_API_URL = 'http://192.168.0.216:3000/api';
+const DEV_API_URL = 'http://10.0.0.9:3000/api';
 const PROD_API_URL = 'https://api.stafflink.com/api';
 
 export const API_URL = __DEV__ ? DEV_API_URL : PROD_API_URL;

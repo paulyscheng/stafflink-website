@@ -1,0 +1,41 @@
+EMAILJS TEMPLATE CONFIGURATION
+==============================
+
+Copy this EXACTLY into your EmailJS template:
+
+SUBJECT LINE:
+New Waitlist Signup - {{user_type}}
+
+EMAIL CONTENT:
+--------------
+New Waitlist Signup!
+
+Type: {{user_type}}
+Name: {{user_name}}
+Phone: {{user_phone}}
+Email: {{user_email}}
+Company: {{company_name}}
+Worker Role: {{worker_role}}
+Submitted: {{submission_date}}
+
+---
+This is an automated message from StaffLink Waitlist system.
+
+
+IMPORTANT SETTINGS:
+------------------
+To Email (fixed): stafflink33@gmail.com
+From Name: StaffLink Waitlist
+Reply To: {{user_email}}
+
+
+VARIABLES BEING SENT:
+--------------------
+- to_email (always "stafflink33@gmail.com")
+- user_type (企业用户 or 工人用户)
+- user_name (user's name)
+- user_phone (phone number)
+- user_email (email or "未提供")
+- company_name (company or "不适用")
+- worker_role (job type or "不适用")
+- submission_date (timestamp)
