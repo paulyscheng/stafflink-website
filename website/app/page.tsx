@@ -19,11 +19,19 @@ export default function Home() {
   const [videoHover, setVideoHover] = useState<'left' | 'right' | null>(null)
   const [videosLoaded, setVideosLoaded] = useState(false)
   const [cardsInView, setCardsInView] = useState(false)
+  const [isWeChat, setIsWeChat] = useState(false)
+  const [videosPlaying, setVideosPlaying] = useState({ company: false, worker: false, hero: false })
   const companyVideoRef = useRef<HTMLVideoElement>(null)
   const workerVideoRef = useRef<HTMLVideoElement>(null)
+  const heroVideoRef = useRef<HTMLVideoElement>(null)
   const transformSectionRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    // Detect WeChat browser
+    const ua = navigator.userAgent.toLowerCase()
+    const isWeChatBrowser = ua.includes('micromessenger') || ua.includes('wechat')
+    setIsWeChat(isWeChatBrowser)
+    
     const handleScroll = () => {
       setScrollY(window.scrollY)
       
@@ -41,11 +49,50 @@ export default function Home() {
     // Trigger video load animation
     setTimeout(() => setVideosLoaded(true), 100)
     
+    // Try to autoplay videos if not WeChat
+    if (!isWeChatBrowser) {
+      const playVideos = async () => {
+        try {
+          if (heroVideoRef.current) {
+            await heroVideoRef.current.play()
+            setVideosPlaying(prev => ({ ...prev, hero: true }))
+          }
+          if (companyVideoRef.current) {
+            await companyVideoRef.current.play()
+            setVideosPlaying(prev => ({ ...prev, company: true }))
+          }
+          if (workerVideoRef.current) {
+            await workerVideoRef.current.play()
+            setVideosPlaying(prev => ({ ...prev, worker: true }))
+          }
+        } catch (error) {
+          console.log('Autoplay failed, user interaction required')
+        }
+      }
+      playVideos()
+    }
+    
     // Check initial scroll position
     handleScroll()
     
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
+
+  const handleVideoPlay = async (videoType: 'company' | 'worker' | 'hero') => {
+    try {
+      let videoRef = null
+      if (videoType === 'hero') videoRef = heroVideoRef
+      else if (videoType === 'company') videoRef = companyVideoRef
+      else if (videoType === 'worker') videoRef = workerVideoRef
+      
+      if (videoRef?.current) {
+        await videoRef.current.play()
+        setVideosPlaying(prev => ({ ...prev, [videoType]: true }))
+      }
+    } catch (error) {
+      console.log('Video play failed:', error)
+    }
+  }
 
   const openWaitlist = (type: 'company' | 'worker') => {
     setWaitlistType(type)
@@ -132,16 +179,38 @@ export default function Home() {
         {/* Background Video */}
         <div className="absolute inset-0">
           <video 
-            autoPlay 
+            ref={heroVideoRef}
+            autoPlay={!isWeChat}
             muted 
             loop 
             playsInline
+            webkit-playsinline="true"
+            x5-video-player-type="h5"
+            x5-video-player-fullscreen="true"
+            x5-playsinline="true"
+            poster="/images/construction-poster.jpg"
+            onClick={() => isWeChat && !videosPlaying.hero && handleVideoPlay('hero')}
             className={`absolute inset-0 w-full h-full object-cover transition-all duration-1000 ${
               videosLoaded ? 'scale-100 opacity-100' : 'scale-110 opacity-0'
             }`}
           >
             <source src="/video/Construction.mp4" type="video/mp4" />
+            <source src="/video/Construction.webm" type="video/webm" />
           </video>
+          
+          {/* Play button overlay for WeChat */}
+          {isWeChat && !videosPlaying.hero && (
+            <div 
+              onClick={() => handleVideoPlay('hero')}
+              className="absolute inset-0 flex items-center justify-center z-20 cursor-pointer"
+            >
+              <div className="bg-black/50 rounded-full p-6 backdrop-blur-sm">
+                <svg className="w-16 h-16 text-white" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"/>
+                </svg>
+              </div>
+            </div>
+          )}
           
           {/* Dark overlay for text readability */}
           <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/50 to-black/70" />
@@ -151,15 +220,15 @@ export default function Home() {
         </div>
         
         {/* Content Overlay */}
-        <div className="relative z-30 min-h-screen flex items-center justify-center px-4">
-          <div className="text-center max-w-5xl mx-auto">
-            <h1 className={`text-5xl md:text-7xl font-bold text-white mb-6 drop-shadow-2xl transition-all duration-1000 delay-500 ${
+        <div className="relative z-30 min-h-screen flex items-center justify-center px-4 py-20">
+          <div className="text-center max-w-5xl mx-auto w-full">
+            <h1 className={`text-4xl sm:text-5xl md:text-7xl font-bold text-white mb-4 sm:mb-6 drop-shadow-2xl transition-all duration-1000 delay-500 ${
               videosLoaded ? 'translate-y-0 opacity-100' : '-translate-y-10 opacity-0'
             }`}>
               诸葛调度
             </h1>
             <div 
-              className={`inline-flex items-center gap-2 bg-gradient-to-r from-blue-600/20 to-purple-600/20 backdrop-blur-sm border-2 border-blue-400/50 px-5 py-3 rounded-full mb-6 transform transition-all duration-1000 shadow-lg ${
+              className={`inline-flex flex-col sm:flex-row items-center gap-1 sm:gap-2 bg-gradient-to-r from-blue-600/20 to-purple-600/20 backdrop-blur-sm border-2 border-blue-400/50 px-3 sm:px-5 py-2 sm:py-3 rounded-full mb-4 sm:mb-6 transform transition-all duration-1000 shadow-lg ${
               videosLoaded ? 'translate-y-0 opacity-100 scale-100 animate-bounce' : '-translate-y-10 opacity-0 scale-95'
             }`} 
               style={{ 
@@ -170,25 +239,29 @@ export default function Home() {
                 boxShadow: videosLoaded ? '0 0 30px rgba(59, 130, 246, 0.4), 0 0 60px rgba(147, 51, 234, 0.2)' : 'none'
               }}
             >
-              <span className="text-blue-400 text-xl animate-pulse">🍂</span>
-              <span className="text-blue-300 font-bold text-lg animate-pulse">今秋即将推出</span>
-              <span className="text-gray-400">|</span>
-              <span className="text-gray-300 text-lg">加入等待名单，成为首批用户</span>
+              <div className="flex items-center gap-2">
+                <span className="text-blue-400 text-lg sm:text-xl animate-pulse">🍂</span>
+                <span className="text-blue-300 font-bold text-base sm:text-lg animate-pulse">今秋即将推出</span>
+              </div>
+              <span className="hidden sm:inline text-gray-400">|</span>
+              <span className="text-gray-300 text-sm sm:text-lg">加入等待名单，成为首批用户</span>
             </div>
-            <p className={`text-2xl md:text-3xl text-blue-400 mb-8 drop-shadow-lg transition-all duration-1000 delay-700 ${
+            <p className={`text-xl sm:text-2xl md:text-3xl text-blue-400 mb-4 sm:mb-8 drop-shadow-lg transition-all duration-1000 delay-700 ${
               videosLoaded ? 'translate-y-0 opacity-100' : '-translate-y-10 opacity-0'
             }`}>
               让每一次派工都精准高效
             </p>
-            <p className={`text-lg md:text-xl text-gray-200 mb-12 max-w-5xl mx-auto drop-shadow-lg transition-all duration-1000 delay-900 whitespace-nowrap ${
+            <p className={`text-base sm:text-lg md:text-xl text-gray-200 mb-8 sm:mb-12 max-w-5xl mx-auto drop-shadow-lg transition-all duration-1000 delay-900 ${
               videosLoaded ? 'translate-y-0 opacity-100' : '-translate-y-10 opacity-0'
             }`}>
-              AI智能匹配，精准连接每一个需求。在这里，我们连接工人与企业，用科技改变蓝领派工。
+              <span className="block sm:inline">AI智能匹配，精准连接每一个需求。</span>
+              <span className="block sm:inline">在这里，我们连接工人与企业，</span>
+              <span className="block sm:inline">用科技改变蓝领派工。</span>
             </p>
             <div className="flex flex-col md:flex-row gap-4 justify-center">
               <button 
                 onClick={() => openWaitlist('company')}
-                className={`px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-lg font-semibold transition-all transform hover:scale-105 backdrop-blur-sm bg-opacity-90 ${
+                className={`w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-base sm:text-lg font-semibold transition-all transform hover:scale-105 backdrop-blur-sm bg-opacity-90 ${
                   videosLoaded ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'
                 }`}
                 style={{ transitionDelay: '1100ms' }}
@@ -197,7 +270,7 @@ export default function Home() {
               </button>
               <button 
                 onClick={() => openWaitlist('worker')}
-                className={`px-8 py-4 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-lg font-semibold transition-all transform hover:scale-105 backdrop-blur-sm bg-opacity-90 ${
+                className={`w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-base sm:text-lg font-semibold transition-all transform hover:scale-105 backdrop-blur-sm bg-opacity-90 ${
                   videosLoaded ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'
                 }`}
                 style={{ transitionDelay: '1200ms' }}
@@ -236,26 +309,38 @@ export default function Home() {
                   <div className="absolute inset-0 bg-gradient-to-b from-gray-800 to-gray-900 rounded-[3rem] shadow-2xl">
                     {/* Screen Area */}
                     <div className="absolute inset-4 bg-black rounded-[2.5rem] overflow-hidden">
-                      {/* Status Bar */}
-                      <div className="absolute top-0 left-0 right-0 h-6 bg-black/50 z-10 flex items-center justify-between px-6">
-                        <span className="text-white text-xs">9:41</span>
-                        <div className="flex gap-1">
-                          <div className="w-4 h-3 bg-white rounded-sm"></div>
-                          <div className="w-4 h-3 bg-white rounded-sm"></div>
-                          <div className="w-4 h-3 bg-white rounded-sm"></div>
-                        </div>
-                      </div>
-                      
-                      {/* Video */}
+                      {/* Video - No status bar overlay */}
                       <video 
-                        autoPlay 
+                        ref={companyVideoRef}
+                        autoPlay={!isWeChat}
                         muted 
                         loop 
                         playsInline
+                        webkit-playsinline="true"
+                        x5-video-player-type="h5"
+                        x5-video-player-fullscreen="true"
+                        x5-playsinline="true"
+                        poster="/images/company-poster.jpg"
+                        onClick={() => isWeChat && !videosPlaying.company && handleVideoPlay('company')}
                         className="absolute inset-0 w-full h-full object-cover"
                       >
                         <source src="/video/Company.MP4" type="video/mp4" />
+                        <source src="/video/Company.webm" type="video/webm" />
                       </video>
+                      
+                      {/* Play button for WeChat */}
+                      {isWeChat && !videosPlaying.company && (
+                        <div 
+                          onClick={() => handleVideoPlay('company')}
+                          className="absolute inset-0 flex items-center justify-center z-30 cursor-pointer"
+                        >
+                          <div className="bg-black/60 rounded-full p-4 backdrop-blur-sm">
+                            <svg className="w-12 h-12 text-white" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"/>
+                            </svg>
+                          </div>
+                        </div>
+                      )}
                       
                       {/* App UI Overlay */}
                       <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/80">
@@ -267,8 +352,7 @@ export default function Home() {
                       </div>
                     </div>
                     
-                    {/* Notch */}
-                    <div className="absolute top-4 left-1/2 transform -translate-x-1/2 w-32 h-6 bg-black rounded-full"></div>
+                    {/* Notch removed to show video */}
                     
                     {/* Home Indicator */}
                     <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 w-20 h-1 bg-gray-400 rounded-full"></div>
@@ -314,26 +398,38 @@ export default function Home() {
                   <div className="absolute inset-0 bg-gradient-to-b from-gray-800 to-gray-900 rounded-[3rem] shadow-2xl">
                     {/* Screen Area */}
                     <div className="absolute inset-4 bg-black rounded-[2.5rem] overflow-hidden">
-                      {/* Status Bar */}
-                      <div className="absolute top-0 left-0 right-0 h-6 bg-black/50 z-10 flex items-center justify-between px-6">
-                        <span className="text-white text-xs">9:41</span>
-                        <div className="flex gap-1">
-                          <div className="w-4 h-3 bg-white rounded-sm"></div>
-                          <div className="w-4 h-3 bg-white rounded-sm"></div>
-                          <div className="w-4 h-3 bg-white rounded-sm"></div>
-                        </div>
-                      </div>
-                      
-                      {/* Video */}
+                      {/* Video - No status bar overlay */}
                       <video 
-                        autoPlay 
+                        ref={workerVideoRef}
+                        autoPlay={!isWeChat}
                         muted 
                         loop 
                         playsInline
+                        webkit-playsinline="true"
+                        x5-video-player-type="h5"
+                        x5-video-player-fullscreen="true"
+                        x5-playsinline="true"
+                        poster="/images/worker-poster.jpg"
+                        onClick={() => isWeChat && !videosPlaying.worker && handleVideoPlay('worker')}
                         className="absolute inset-0 w-full h-full object-cover"
                       >
                         <source src="/video/Worker.MP4" type="video/mp4" />
+                        <source src="/video/Worker.webm" type="video/webm" />
                       </video>
+                      
+                      {/* Play button for WeChat */}
+                      {isWeChat && !videosPlaying.worker && (
+                        <div 
+                          onClick={() => handleVideoPlay('worker')}
+                          className="absolute inset-0 flex items-center justify-center z-30 cursor-pointer"
+                        >
+                          <div className="bg-black/60 rounded-full p-4 backdrop-blur-sm">
+                            <svg className="w-12 h-12 text-white" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"/>
+                            </svg>
+                          </div>
+                        </div>
+                      )}
                       
                       {/* App UI Overlay */}
                       <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/80">
@@ -354,8 +450,7 @@ export default function Home() {
                       </div>
                     </div>
                     
-                    {/* Notch */}
-                    <div className="absolute top-4 left-1/2 transform -translate-x-1/2 w-32 h-6 bg-black rounded-full"></div>
+                    {/* Notch removed to show video */}
                     
                     {/* Home Indicator */}
                     <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 w-20 h-1 bg-gray-400 rounded-full"></div>
