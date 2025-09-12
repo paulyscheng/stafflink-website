@@ -86,11 +86,28 @@ export default function Home() {
       else if (videoType === 'worker') videoRef = workerVideoRef
       
       if (videoRef?.current) {
-        await videoRef.current.play()
-        setVideosPlaying(prev => ({ ...prev, [videoType]: true }))
+        // For WeChat, ensure video is muted and try multiple play methods
+        videoRef.current.muted = true
+        videoRef.current.setAttribute('muted', 'true')
+        
+        // Try playing with a promise
+        const playPromise = videoRef.current.play()
+        
+        if (playPromise !== undefined) {
+          playPromise.then(() => {
+            setVideosPlaying(prev => ({ ...prev, [videoType]: true }))
+          }).catch(error => {
+            // Auto-play was prevented, try again with user interaction
+            console.log('Autoplay prevented, trying fallback:', error)
+            // Set playing state anyway to hide the button
+            setVideosPlaying(prev => ({ ...prev, [videoType]: true }))
+          })
+        }
       }
     } catch (error) {
       console.log('Video play failed:', error)
+      // Still hide the play button even if play fails
+      setVideosPlaying(prev => ({ ...prev, [videoType]: true }))
     }
   }
 
@@ -189,7 +206,6 @@ export default function Home() {
             x5-video-player-fullscreen="true"
             x5-playsinline="true"
             poster="/images/construction-poster.jpg"
-            onClick={() => isWeChat && !videosPlaying.hero && handleVideoPlay('hero')}
             className={`absolute inset-0 w-full h-full object-cover transition-all duration-1000 ${
               videosLoaded ? 'scale-100 opacity-100' : 'scale-110 opacity-0'
             }`}
@@ -198,25 +214,26 @@ export default function Home() {
             <source src="/video/Construction.webm" type="video/webm" />
           </video>
           
-          {/* Play button overlay for WeChat */}
+          {/* Dark overlay for text readability */}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/50 to-black/70 z-10" />
+          
+          {/* Additional overlay for better contrast */}
+          <div className="absolute inset-0 bg-black/30 z-10" />
+          
+          {/* Play button overlay for WeChat - must be above overlays */}
           {isWeChat && !videosPlaying.hero && (
             <div 
               onClick={() => handleVideoPlay('hero')}
               className="absolute inset-0 flex items-center justify-center z-20 cursor-pointer"
+              style={{ pointerEvents: 'auto' }}
             >
-              <div className="bg-black/50 rounded-full p-6 backdrop-blur-sm">
+              <div className="bg-black/50 rounded-full p-6 backdrop-blur-sm pointer-events-auto">
                 <svg className="w-16 h-16 text-white" fill="currentColor" viewBox="0 0 20 20">
                   <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"/>
                 </svg>
               </div>
             </div>
           )}
-          
-          {/* Dark overlay for text readability */}
-          <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/50 to-black/70" />
-          
-          {/* Additional overlay for better contrast */}
-          <div className="absolute inset-0 bg-black/30" />
         </div>
         
         {/* Content Overlay */}
