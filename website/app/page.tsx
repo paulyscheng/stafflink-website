@@ -220,11 +220,11 @@ export default function Home() {
           {/* Additional overlay for better contrast */}
           <div className="absolute inset-0 bg-black/30 z-10" />
           
-          {/* Play button overlay for WeChat - must be above overlays */}
+          {/* Play button overlay for WeChat - must be above ALL content (z-40) */}
           {isWeChat && !videosPlaying.hero && (
             <div 
               onClick={() => handleVideoPlay('hero')}
-              className="absolute inset-0 flex items-center justify-center z-20 cursor-pointer"
+              className="absolute inset-0 flex items-center justify-center z-40 cursor-pointer"
               style={{ pointerEvents: 'auto' }}
             >
               <div className="bg-black/50 rounded-full p-6 backdrop-blur-sm pointer-events-auto">
