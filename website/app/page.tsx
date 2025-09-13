@@ -552,7 +552,6 @@ export default function Home() {
                   <p className="text-sm text-gray-300 italic">
                     "再也不用半夜爬起来打电话了，AI帮我们24小时招人"
                   </p>
-                  <p className="text-xs text-gray-400 mt-2">- 某建筑公司项目经理</p>
                 </div>
               </div>
             </div>
@@ -575,7 +574,6 @@ export default function Home() {
                   <p className="text-sm text-gray-300 italic">
                     "不用担心错过机会，合适的工作会通过多种方式通知我，我能自己选择什么时候回复"
                   </p>
-                  <p className="text-xs text-gray-400 mt-2">- 张师傅，电工</p>
                 </div>
               </div>
             </div>
